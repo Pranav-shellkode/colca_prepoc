@@ -1,13 +1,26 @@
+import boto3
 from strands import Agent 
 from strands.models import BedrockModel 
+from backend.strands.prompt import colca_sales_agent_prompt 
+from backend.core.config import * 
 
-bedrock_model = BedrockModel( 
-    model_id="us.anthropic.claude-sonnet-4.6",
-    temperature=0.3,
-    region_name="us-east-1", 
-)
+def build_agent() -> Agent: 
 
-agent = Agent(
-    model=bedrock_model, 
-    system_prompt=
-)
+    bedrock_session = boto3.Session(
+        aws_access_key_id=AWS_ACCESS_KEY_ID ,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY, 
+        aws_session_token=AWS_SESSION_TOKEN
+    )
+
+    bedrock_model = BedrockModel( 
+        session=bedrock_session,
+        model_id="us.anthropic.claude-sonnet-4.6",
+        temperature=0.3,
+        region_name="us-east-1", 
+    )
+
+    return Agent(
+        model=bedrock_model, 
+        system_prompt=colca_sales_agent_prompt() ,
+        tools = [] 
+    )
