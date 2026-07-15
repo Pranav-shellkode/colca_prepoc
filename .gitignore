@@ -10,5 +10,7 @@ wheels/
 .venv
 .env
 backend/core/.env
-
+frontend/node_modules/
 frontend/.env
+.claude/worktrees/eventual-snacking-raccoon
+.claude/

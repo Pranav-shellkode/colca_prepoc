@@ -14,6 +14,8 @@ from pipecat.processors.frameworks.strands_agents import StrandsAgentsProcessor
 from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService,ElevenLabsRealtimeSTTSettings,CommitStrategy
 from pipecat.services.elevenlabs.tts import ElevenLabsTTSService,ElevenLabsTTSSettings 
 from pipecat.frames.frames import LLMMessagesAppendFrame 
+from pipecat.services.deepgram.stt import DeepgramSTTService,DeepgramSTTSettings
+from pipecat.services.deepgram.tts import DeepgramTTSService,DeepgramTTSSettings 
 
 from backend.core.config import * 
 from backend.strands.agent import build_agent 
@@ -30,13 +32,20 @@ async def build_pipeline(transport):
 
 
     # stt service 
+    deepgram_stt = DeepgramSTTService(
+        api_key=DEEPGRAM_API_KEY
+    )
+
     elevenlabs_stt = ElevenLabsRealtimeSTTService(
         api_key=ELEVENLABS_API_KEY, 
-        include_timestamps=True , 
-        commit_strategy=CommitStrategy.MANUAL , 
+        commit_strategy=CommitStrategy.VAD, 
     )
 
     # tts service 
+    deepgram_tts = DeepgramTTSService(
+        api_key=DEEPGRAM_API_KEY,
+    )
+
     elevenlabs_tts = ElevenLabsTTSService(
         api_key=ELEVENLABS_API_KEY, 
         settings=ElevenLabsTTSSettings(
@@ -53,10 +62,10 @@ async def build_pipeline(transport):
     # VAD detection 
     vad = SileroVADAnalyzer(
         params=VADParams(
-            confidence=0.8, 
+            confidence=0.7, 
             start_secs=0.2, 
             stop_secs=0.3, 
-            min_volume=0.9,
+            min_volume=0.6,
         )
     )
 
@@ -70,14 +79,13 @@ async def build_pipeline(transport):
     )
 
     # try it out later replace with the other format 
-    context_aggregator = LLMContextAggregatorPair(context=context,
-            user_params=LLMUserAggregatorParams(vad_analyzer=vad))
+    context_aggregator = LLMContextAggregatorPair(context=context)
 
 
     # main pipeline 
     pipeline = Pipeline([
         transport.input() , 
-        elevenlabs_stt , 
+        deepgram_stt , 
         context_aggregator.user() ,
         sales_agent , 
         elevenlabs_tts , 

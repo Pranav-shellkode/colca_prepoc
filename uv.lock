@@ -373,7 +373,7 @@ dependencies = [
     { name = "langchain-community" },
     { name = "langchain-postgres" },
     { name = "langchain-text-splitters" },
-    { name = "pipecat-ai" },
+    { name = "pipecat-ai", extra = ["deepgram"] },
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "strands-agents" },
@@ -389,7 +389,7 @@ requires-dist = [
     { name = "langchain-community", specifier = ">=0.4.2" },
     { name = "langchain-postgres", specifier = ">=0.0.17" },
     { name = "langchain-text-splitters", specifier = ">=1.1.2" },
-    { name = "pipecat-ai", extras = ["elevenlabs", "silero"], specifier = ">=1.5.0" },
+    { name = "pipecat-ai", extras = ["deepgram", "elevenlabs", "silero"], specifier = ">=1.5.0" },
     { name = "pypdf", specifier = ">=6.14.2" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "strands-agents", specifier = ">=1.47.0" },
@@ -453,6 +453,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/a0/db537264e234f7273a73ec020873d6d6b39dfd8a53db78b550ca8320440e/cryptography-49.0.0-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:67e1d20ad9ef3a563c59ef22e7a8a0b8210bd26604369ea4a30a7c66aefe504e", size = 4834820, upload-time = "2026-06-12T20:01:51.847Z" },
     { url = "https://files.pythonhosted.org/packages/93/77/8df9eb486495979bccecd1062e2eaf435250e84437040295b57d09048b0b/cryptography-49.0.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:42b0684e0e40cf26122427802486f6d93aea593612603a94fbf260c7eb1e9c1b", size = 4967968, upload-time = "2026-06-12T20:02:12.524Z" },
     { url = "https://files.pythonhosted.org/packages/c2/e6/f60198ea8d9dfa15fff9ed4ca02ce362f6eadd9ba757dcc50634c4257b63/cryptography-49.0.0-cp39-abi3-win_amd64.whl", hash = "sha256:026ac7423e6fa66872d3bf889be5974507da3944f866f704fa200eadacd00001", size = 3785547, upload-time = "2026-06-12T20:02:26.847Z" },
+]
+
+[[package]]
+name = "deepgram-sdk"
+version = "7.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/e1/d77f17f55fac94bf6aa81fb01a355ecfd923e12b5f19ef5a67cfc202d652/deepgram_sdk-7.4.0.tar.gz", hash = "sha256:0d35f830bcaa01196e3546b8c326f1d872f8fa52fc841c5640c2d68ef6678a03", size = 212507, upload-time = "2026-06-26T20:55:56.053Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/57/718090410686cbc8d039178e518ab9a010c9dd7bbef327918323f562274a/deepgram_sdk-7.4.0-py3-none-any.whl", hash = "sha256:713a84c22dfdb87fa37f44b36ece47938580e3343815254cc19fcaffff9915c5", size = 565593, upload-time = "2026-06-26T20:55:54.565Z" },
 ]
 
 [[package]]
@@ -1651,6 +1667,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e3/59/7b46ccbeb7c8f68083d0bc1ef39583e78938c6e65af1ff6f707051ea0948/pipecat_ai-1.5.0.tar.gz", hash = "sha256:df9bd5c3176076d425ffba3d510e0122d055b97c9ba8ad35a4390073eb421e18", size = 11624719, upload-time = "2026-07-04T17:11:50.441Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/05/c7daebbf0fc59fd6106e34e52a255727443c1db49d046f7ed0bd9dcb6e4e/pipecat_ai-1.5.0-py3-none-any.whl", hash = "sha256:6089ac7ec418b310975c9c16dd472c16f99838810aae707d669b4f6f5981cf8a", size = 11264890, upload-time = "2026-07-04T17:11:47.677Z" },
+]
+
+[package.optional-dependencies]
+deepgram = [
+    { name = "deepgram-sdk" },
 ]
 
 [[package]]
