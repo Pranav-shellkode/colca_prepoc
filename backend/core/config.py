@@ -16,6 +16,7 @@ AWS_SESSION_TOKEN=os.getenv("aws_session_token","")
 
 #POSTGRES 
 POSTGRES_URL=os.getenv("POSTGRES_URL")
+print(POSTGRES_URL) 
 
 
 

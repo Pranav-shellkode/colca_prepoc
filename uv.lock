@@ -370,9 +370,11 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "langchain" },
     { name = "langchain-aws" },
+    { name = "langchain-community" },
     { name = "langchain-postgres" },
     { name = "langchain-text-splitters" },
     { name = "pipecat-ai" },
+    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "strands-agents" },
     { name = "strands-agents-tools" },
@@ -384,9 +386,11 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.139.0" },
     { name = "langchain", specifier = ">=1.3.13" },
     { name = "langchain-aws", specifier = ">=1.6.2" },
+    { name = "langchain-community", specifier = ">=0.4.2" },
     { name = "langchain-postgres", specifier = ">=0.0.17" },
     { name = "langchain-text-splitters", specifier = ">=1.1.2" },
     { name = "pipecat-ai", extras = ["elevenlabs", "silero"], specifier = ">=1.5.0" },
+    { name = "pypdf", specifier = ">=6.14.2" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "strands-agents", specifier = ">=1.47.0" },
     { name = "strands-agents-tools", specifier = ">=0.8.3" },
@@ -947,6 +951,46 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e8/59/04f8572e65581d032b2df2516c0059fa064e680f5caa5cabcd03d525092a/langchain_aws-1.6.2.tar.gz", hash = "sha256:df2c15b463c068031af40460dbea6efb7999832263ff6eaec6b99c5f6b291acd", size = 537522, upload-time = "2026-07-07T01:24:58.11Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0e/ed/bb5211637276616e7b176f3ff08e9d0bf1ce61d1a00c99d26348d6236a3d/langchain_aws-1.6.2-py3-none-any.whl", hash = "sha256:4755c60ce88fff2b829d96027068b7930f335cd85da41fda061769439c288251", size = 206507, upload-time = "2026-07-07T01:24:56.557Z" },
+]
+
+[[package]]
+name = "langchain-classic"
+version = "1.0.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langchain-text-splitters" },
+    { name = "langsmith" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "sqlalchemy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8d/65/6b5e8a7ff2f2968652c88a67dcecb925b9d8f0a0ce9458c76cd5a0dbd138/langchain_classic-1.0.8.tar.gz", hash = "sha256:ada0cc341a8a5b80fb24d73bdfaaeb849056ee2d8a41cc468355163fd3667484", size = 10557071, upload-time = "2026-06-10T21:27:54.866Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/9a/b8f5cb7490fdbf233088031fc69c9c747439d4097f67f196c1eb4869916d/langchain_classic-1.0.8-py3-none-any.whl", hash = "sha256:1a11ea7fbe630c4f2af2f3873d27718ceac9488cf32d0821030be7cf039a6213", size = 1041536, upload-time = "2026-06-10T21:27:52.767Z" },
+]
+
+[[package]]
+name = "langchain-community"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "httpx-sse" },
+    { name = "langchain-classic" },
+    { name = "langchain-core" },
+    { name = "langsmith" },
+    { name = "numpy" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "sqlalchemy" },
+    { name = "tenacity" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ea/0c/e3aca1f2b1c5b95f8b87cb2b6e81a6f20d538c07a128419dc01cef0617b6/langchain_community-0.4.2.tar.gz", hash = "sha256:a99308160d53d7e9b5965ee665e5173709914338210089fd5788ad724432c21e", size = 33268708, upload-time = "2026-05-22T19:42:59.374Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8f/39/5d97e42a3e95dc2a6d71b2f902a3fae71786131e11d01bddb604accb0ebe/langchain_community-0.4.2-py3-none-any.whl", hash = "sha256:84dd8c5122532394d5b6849a5fc9995ef28e4f77227daeb09f24b3d942e9e466", size = 2364406, upload-time = "2026-05-22T19:42:57.103Z" },
 ]
 
 [[package]]
@@ -1857,6 +1901,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/23/00/f915eaa75326f4209941179c2b93ac477f2040e4aeff5bb21d16eb8058f9/pyloudnorm-0.2.0.tar.gz", hash = "sha256:8bf597658ea4e1975c275adf490f6deb5369ea409f2901f939915efa4b681b16", size = 14037, upload-time = "2026-01-04T11:43:35.265Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/aa/b6/65a49a05614b2548edbba3aab118f2ebe7441dfd778accdcdce9f6567f20/pyloudnorm-0.2.0-py3-none-any.whl", hash = "sha256:9bb69afb904f59d007a7f9ba3d75d16fb8aeef35c44d6df822a9f192d69cf13f", size = 10879, upload-time = "2026-01-04T11:43:34.534Z" },
+]
+
+[[package]]
+name = "pypdf"
+version = "6.14.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/72/7dfd5ff1c9c37de97a731701f51af091325f123d9d4270361c9c69e4431f/pypdf-6.14.2.tar.gz", hash = "sha256:7873f502fe4385e79539b21d872392dc0c4e3714327c15881cbc7fbfd1f95b25", size = 6491182, upload-time = "2026-06-23T14:18:30.859Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/e6/136aa8993a2ae7214e0b0ef2edaa0d2e08d1d4e4982635b08a835ff31ec8/pypdf-6.14.2-py3-none-any.whl", hash = "sha256:3f07891af76dc002657e04993ab9b4de81de29f9013b9761d0b7968bff12e946", size = 349514, upload-time = "2026-06-23T14:18:28.867Z" },
 ]
 
 [[package]]

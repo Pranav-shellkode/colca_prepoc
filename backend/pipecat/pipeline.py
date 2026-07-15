@@ -8,7 +8,7 @@ from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams , PipelineWorker 
 from pipecat.processors.aggregators.llm_context import LLMContext 
 from pipecat.processors.aggregators.llm_response_universal import (
-    LLMContextAggregatorPair , LLMAssistantAggregatorParams
+    LLMContextAggregatorPair , LLMAssistantAggregatorParams , LLMUserAggregatorParams
 )
 from pipecat.processors.frameworks.strands_agents import StrandsAgentsProcessor 
 from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService,ElevenLabsRealtimeSTTSettings,CommitStrategy
@@ -71,7 +71,7 @@ async def build_pipeline(transport):
 
     # try it out later replace with the other format 
     context_aggregator = LLMContextAggregatorPair(context=context,
-            user_params=LLMAssistantAggregatorParams(VADAnalyzer=vad))
+            user_params=LLMUserAggregatorParams(vad_analyzer=vad))
 
 
     # main pipeline 

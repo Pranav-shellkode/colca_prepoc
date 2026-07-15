@@ -3,6 +3,7 @@ from strands import Agent
 from strands.models import BedrockModel 
 from backend.strands.prompt import colca_sales_agent_prompt 
 from backend.core.config import * 
+from backend.strands.tools.retrieval_tool import retrieve_colca_faq
 
 def build_agent() -> Agent: 
 
@@ -13,14 +14,13 @@ def build_agent() -> Agent:
     )
 
     bedrock_model = BedrockModel( 
-        session=bedrock_session,
-        model_id="us.anthropic.claude-sonnet-4.6",
+        boto_session=bedrock_session,
+        model_id="us.anthropic.claude-sonnet-4-6",
         temperature=0.3,
-        region_name="us-east-1", 
     )
 
     return Agent(
         model=bedrock_model, 
         system_prompt=colca_sales_agent_prompt() ,
-        tools = [] 
+        tools = [retrieve_colca_faq], 
     )

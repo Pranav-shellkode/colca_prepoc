@@ -13,7 +13,7 @@ from pipecat.transports.websocket.fastapi import (
 
 from pipecat.pipeline.runner import WorkerRunner 
 # frame serializer according to the right telephony provider 
-from pipecat.serializers.twilio import TwilioFrameSerializer 
+from pipecat.serializers.protobuf import ProtobufFrameSerializer 
 
 from backend.pipecat.pipeline import build_pipeline 
 
@@ -53,7 +53,7 @@ async def websocket_endpoint(websocket : WebSocket):
         websocket=websocket, 
         params=FastAPIWebsocketParams(
             add_wav_header=False, 
-            serializer=TwilioFrameSerializer(), 
+            serializer=ProtobufFrameSerializer(), 
             audio_in_enabled=True, 
             audio_out_enabled=True, 
             audio_in_sample_rate=16000, 
@@ -66,7 +66,7 @@ async def websocket_endpoint(websocket : WebSocket):
     runner = WorkerRunner(handle_sigint=False)
 
     try: 
-        pipeline , worker = build_pipeline(transport=transport) 
+        pipeline , worker = await build_pipeline(transport=transport) 
         await runner.run(worker) 
     except WebSocketDisconnect: 
         logger.info("Websocket disconnected") 
