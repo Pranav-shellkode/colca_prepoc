@@ -5,7 +5,7 @@ from langchain_aws import BedrockEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 
-PDF_PATH = "/home/pranav/Downloads/colca_faq.pdf"
+PDF_PATH = "/Users/pranav/Files/shellkode/colca_prepoc/docs/colca_faq.pdf"
 
 loader = PyPDFLoader(PDF_PATH)
 raw_docs = loader.load()  # one Document per page, with page_content + metadata

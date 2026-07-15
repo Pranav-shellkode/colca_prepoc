@@ -32,19 +32,25 @@ async def build_pipeline(transport):
 
 
     # stt service 
-    deepgram_stt = DeepgramSTTService(
-        api_key=DEEPGRAM_API_KEY
-    )
+    # deepgram_stt = DeepgramSTTService(
+    #     api_key=DEEPGRAM_API_KEY
+    # )
 
     elevenlabs_stt = ElevenLabsRealtimeSTTService(
         api_key=ELEVENLABS_API_KEY, 
-        commit_strategy=CommitStrategy.VAD, 
+        commit_strategy=CommitStrategy.VAD ,
+        settings=ElevenLabsRealtimeSTTSettings(
+            language="eng",
+            vad_silence_threshold_secs=0.4 , 
+            vad_threshold=0.6,
+
+        )
     )
 
     # tts service 
-    deepgram_tts = DeepgramTTSService(
-        api_key=DEEPGRAM_API_KEY,
-    )
+    # deepgram_tts = DeepgramTTSService(
+    #     api_key=DEEPGRAM_API_KEY,
+    # )
 
     elevenlabs_tts = ElevenLabsTTSService(
         api_key=ELEVENLABS_API_KEY, 
@@ -60,14 +66,6 @@ async def build_pipeline(transport):
     sales_agent = StrandsAgentsProcessor(agent=agent) 
 
     # VAD detection 
-    vad = SileroVADAnalyzer(
-        params=VADParams(
-            confidence=0.7, 
-            start_secs=0.2, 
-            stop_secs=0.3, 
-            min_volume=0.6,
-        )
-    )
 
     system_prompt = colca_sales_agent_prompt() 
 
@@ -79,13 +77,13 @@ async def build_pipeline(transport):
     )
 
     # try it out later replace with the other format 
-    context_aggregator = LLMContextAggregatorPair(context=context)
+    context_aggregator = LLMContextAggregatorPair(context=context) 
 
 
     # main pipeline 
     pipeline = Pipeline([
         transport.input() , 
-        deepgram_stt , 
+        elevenlabs_stt, 
         context_aggregator.user() ,
         sales_agent , 
         elevenlabs_tts , 
