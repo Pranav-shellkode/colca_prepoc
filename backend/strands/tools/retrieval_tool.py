@@ -2,6 +2,7 @@ from strands import tool
 from langchain_postgres import PGEngine, PGVectorStore
 from langchain_aws import BedrockEmbeddings
 from backend.core.config import *
+from pipecat.services.llm_service import FunctionCallParams
 
 TABLE_NAME = "colca_faq"
 

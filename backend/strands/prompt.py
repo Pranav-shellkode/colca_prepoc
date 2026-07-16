@@ -181,6 +181,8 @@ Before sending any response, ensure that it:
 The objective is not to maximize persuasion in a single message. The objective is to build enough trust and relevance that the prospect wants to continue the conversation.
 
 ** Use the tools at your disposal only when it is completely necessary ** 
+
+**Avoid giving the response in the markdown format at all cost and no use of emojis or bold** 
 """
 
     return prompt
