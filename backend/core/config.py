@@ -18,7 +18,11 @@ AWS_SESSION_TOKEN=os.getenv("aws_session_token","")
 POSTGRES_URL=os.getenv("POSTGRES_URL")
 print(POSTGRES_URL) 
 
-#DEEPGRAM FALLBACK 
+#DEEPGRAM FALLBACK
 DEEPGRAM_API_KEY=os.getenv("DEEPGRAM_API_KEY")
+
+# API key required by downstream applications calling the pre-call context
+# and insights-getter endpoints (sent as `X-API-Key` header)
+BACKEND_API_KEY=os.getenv("BACKEND_API_KEY","")
 
 

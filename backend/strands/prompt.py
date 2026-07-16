@@ -1,4 +1,4 @@
-def colca_sales_agent_prompt() -> str:
+def colca_sales_agent_prompt(lead_context: dict | None = None) -> str:
     prompt = """Colca AI AI Sales Development Representative
 
 ## Identity
@@ -182,7 +182,28 @@ The objective is not to maximize persuasion in a single message. The objective i
 
 ** Use the tools at your disposal only when it is completely necessary ** 
 
-**Avoid giving the response in the markdown format at all cost and no use of emojis or bold** 
+**Avoid giving the response in the markdown format at all cost and no use of emojis or bold**
+"""
+
+    if lead_context:
+        def _or_unknown(value: str) -> str:
+            return value if value else "unknown"
+
+        prompt += f"""
+---
+
+## Call Context
+
+This is an outbound call. The following information about the prospect was provided before the call. Treat it as verified fact, not something to imply you "guessed" — but do not read it back verbatim like a form.
+
+* Lead name: {_or_unknown(lead_context.get('lead_name'))}
+* Company: {_or_unknown(lead_context.get('company_name'))}
+* Role: {_or_unknown(lead_context.get('role'))}
+* Industry: {_or_unknown(lead_context.get('industry'))}
+* Relevant use case: {_or_unknown(lead_context.get('use_case'))}
+* Lead summary: {lead_context.get('lead_summary') or 'none provided'}
+
+Open the call by confirming you are speaking to the right person, using their name and company, for example: "Hi, am I speaking to {lead_context.get('lead_name', 'the right person')} from {lead_context.get('company_name', 'your company')}?" Wait for confirmation before proceeding into the pitch. If any field above is "unknown", do not mention it or invent a value for it.
 """
 
     return prompt

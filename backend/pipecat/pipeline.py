@@ -27,12 +27,20 @@ from backend.utils.call_store import save_call_summary
 
 logger = logging.getLogger(__name__) 
 
-async def build_pipeline(transport):
+async def build_pipeline(transport, call_id: str | None = None, lead_context: dict | None = None):
     """
-    returns a pipeline and a worker to be run 
-    """ 
-    session_id = str(uuid.uuid4()) 
-    started_at = datetime.now(timezone.utc).isoformat() 
+    returns a pipeline and a worker to be run
+
+    call_id: pre-call identifier issued by the pre-call data capture layer;
+        falls back to a fresh id for ad-hoc/inbound sessions.
+    lead_context: conditioned pre-call context payload (see
+        backend.utils.lead_context.condition_lead_context), used to
+        personalize the system prompt and open the call by name.
+    """
+    session_id = str(uuid.uuid4())
+    call_id = call_id or session_id
+    started_at = datetime.now(timezone.utc).isoformat()
+    phone_number = (lead_context or {}).get("phone_number")
 
 
     # stt service 
@@ -59,9 +67,9 @@ async def build_pipeline(transport):
         )
     )
 
-    # Agent service 
-    agent = build_agent() 
-    sales_agent = StrandsAgentsProcessor(agent=agent) 
+    # Agent service
+    agent = build_agent(lead_context=lead_context)
+    sales_agent = StrandsAgentsProcessor(agent=agent)
 
     # VAD detection 
     vad_analyzer = SileroVADAnalyzer(
@@ -73,7 +81,7 @@ async def build_pipeline(transport):
     )
     )
 
-    system_prompt = colca_sales_agent_prompt() 
+    system_prompt = colca_sales_agent_prompt(lead_context)
 
     context = LLMContext(
         messages=[{
@@ -107,16 +115,19 @@ async def build_pipeline(transport):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport,client):
-        logger.info("Client connected") 
-        # await worker.queue_frames([
-        #     LLMMessagesAppendFrame(
-        #         messages=[{
-        #             "role": "user",
-        #             "content": "Please greet me briefly and let me know you're ready to help.",
-        #         }],
-        #         run_llm=True,
-        #     )
-        # ])
+        logger.info("Client connected")
+        if lead_context:
+            # Outbound call: the agent speaks first, opening with the
+            # personalized identity-confirmation greeting from the prompt.
+            await worker.queue_frames([
+                LLMMessagesAppendFrame(
+                    messages=[{
+                        "role": "user",
+                        "content": "The call has connected. Open with your identity-confirmation greeting now.",
+                    }],
+                    run_llm=True,
+                )
+            ])
 
     @ transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport,client):
@@ -132,11 +143,19 @@ async def build_pipeline(transport):
             try:
                 summary = await asyncio.to_thread(summarize_call, transcript)
                 await asyncio.to_thread(
-                    save_call_summary, session_id, started_at, ended_at, transcript, summary
+                    save_call_summary,
+                    call_id,
+                    session_id,
+                    started_at,
+                    ended_at,
+                    transcript,
+                    summary,
+                    phone_number,
+                    lead_context,
                 )
-                logger.info(f"Saved call summary for session {session_id}")
+                logger.info(f"Saved call summary for call {call_id}")
             except Exception:
-                logger.exception(f"Failed to save call summary for session {session_id}")
+                logger.exception(f"Failed to save call summary for call {call_id}")
     
     return pipeline , worker 
 

@@ -13,8 +13,11 @@ import {
 } from '@pipecat-ai/client-react'
 import { WebSocketTransport, ProtobufFrameSerializer } from '@pipecat-ai/websocket-transport'
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws'
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { createCallContext, getCallInsights, listCalls, wsUrlForCall } from './api'
+import type { CallInsights, CallListItem, LeadBrief } from './api'
+import BriefForm from './components/BriefForm'
+import DispositionPanel from './components/DispositionPanel'
+import HistorySidebar from './components/HistorySidebar'
 
 const pcClient = new PipecatClient({
   transport: new WebSocketTransport({
@@ -33,40 +36,19 @@ const SafeProvider = PipecatClientProvider as unknown as React.ComponentType<{
 
 export default function App() {
   return (
-    <SafeProvider client={pcClient}>
-      <PipecatClientAudio />
-      <VoiceApp />
-    </SafeProvider>
+    <div className="vkui-root dark">
+      <SafeProvider client={pcClient}>
+        <PipecatClientAudio />
+        <VoiceApp />
+      </SafeProvider>
+    </div>
   )
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type AgentState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking'
-
-interface Session {
-  id: string
-  title: string
-  created_at: string
-}
-
-interface HistoricalMessage {
-  role: string
-  content: string
-  created_at: string
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yestStart  = new Date(todayStart.getTime() - 86400000)
-  if (d >= todayStart) return `Today ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-  if (d >= yestStart)  return `Yesterday ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
+type Stage = 'brief' | 'call' | 'disposition'
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -79,22 +61,31 @@ function VoiceApp() {
   const [toolName, setToolName] = useState('')
   const transcriptEndRef = useRef<HTMLDivElement>(null)
 
-  // Session history state
-  const [sessions, setSessions] = useState<Session[]>([])
+  // Call lifecycle state
+  const [stage, setStage] = useState<Stage>('brief')
+  const [currentCallId, setCurrentCallId] = useState<string | null>(null)
+  const [currentBrief, setCurrentBrief] = useState<LeadBrief | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [insights, setInsights] = useState<CallInsights | null>(null)
+  const [loadingInsights, setLoadingInsights] = useState(false)
+
+  // History sidebar state
+  const [calls, setCalls] = useState<CallListItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [histMessages, setHistMessages] = useState<HistoricalMessage[]>([])
+  const [histInsights, setHistInsights] = useState<CallInsights | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
-  const isConnected  = transportState === 'ready' || transportState === 'connected'
+  const isConnected = transportState === 'ready' || transportState === 'connected'
   const isConnecting = transportState === 'connecting' || transportState === 'authenticating'
 
   // ── Agent state events ────────────────────────────────────────────────────
 
-  useRTVIClientEvent(RTVIEvent.BotStartedSpeaking,  useCallback(() => setAgentState('speaking'),  []))
-  useRTVIClientEvent(RTVIEvent.BotStoppedSpeaking,  useCallback(() => setAgentState('listening'), []))
+  useRTVIClientEvent(RTVIEvent.BotStartedSpeaking, useCallback(() => setAgentState('speaking'), []))
+  useRTVIClientEvent(RTVIEvent.BotStoppedSpeaking, useCallback(() => setAgentState('listening'), []))
   useRTVIClientEvent(RTVIEvent.UserStartedSpeaking, useCallback(() => setAgentState('listening'), []))
-  useRTVIClientEvent(RTVIEvent.UserStoppedSpeaking, useCallback(() => setAgentState('thinking'),  []))
-  useRTVIClientEvent(RTVIEvent.BotLlmStarted,       useCallback(() => setAgentState('thinking'),  []))
+  useRTVIClientEvent(RTVIEvent.UserStoppedSpeaking, useCallback(() => setAgentState('thinking'), []))
+  useRTVIClientEvent(RTVIEvent.BotLlmStarted, useCallback(() => setAgentState('thinking'), []))
   useRTVIClientEvent(
     RTVIEvent.LLMFunctionCallStarted,
     useCallback((data: { function_name?: string }) => {
@@ -107,7 +98,75 @@ function VoiceApp() {
     useCallback(() => setTimeout(() => setToolActive(false), 1800), [])
   )
 
-  // ── Connection state tracking ─────────────────────────────────────────────
+  // ── History data ──────────────────────────────────────────────────────────
+
+  const fetchCalls = useCallback(async () => {
+    try {
+      setCalls(await listCalls())
+    } catch {
+      /* backend not yet running, or no API key configured for this dev session */
+    }
+  }, [])
+
+  useEffect(() => { fetchCalls() }, [fetchCalls])
+
+  const viewHistoricalCall = useCallback(async (callId: string) => {
+    setSelectedId(callId)
+    setStage('brief') // leave any active call view; historical view renders independently below
+    try {
+      setHistInsights(await getCallInsights(callId))
+    } catch {
+      setHistInsights(null)
+    }
+  }, [])
+
+  const clearHistorySelection = useCallback(() => {
+    setSelectedId(null)
+    setHistInsights(null)
+  }, [])
+
+  // ── Call lifecycle: brief -> connect -> disposition ──────────────────────
+
+  const fetchInsightsWithRetry = useCallback(async (callId: string) => {
+    // The post-call summary is written asynchronously right after disconnect,
+    // so the row may not exist yet on the first read.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        return await getCallInsights(callId)
+      } catch {
+        await new Promise(r => setTimeout(r, 1500))
+      }
+    }
+    return null
+  }, [])
+
+  const handleStart = useCallback(async (brief: LeadBrief) => {
+    setStarting(true)
+    setStartError(null)
+    try {
+      const { call_id } = await createCallContext(brief)
+      setCurrentCallId(call_id)
+      setCurrentBrief(brief)
+      clearHistorySelection()
+      await client?.connect({ wsUrl: wsUrlForCall(call_id) })
+      setStage('call')
+    } catch (e) {
+      setStartError(e instanceof Error ? e.message : 'Could not start the call.')
+    } finally {
+      setStarting(false)
+    }
+  }, [client, clearHistorySelection])
+
+  const handleDisconnect = useCallback(async () => {
+    try { await client?.disconnect() } catch (e) { console.error(e) }
+  }, [client])
+
+  const handleNewCall = useCallback(() => {
+    setStage('brief')
+    setCurrentCallId(null)
+    setCurrentBrief(null)
+    setInsights(null)
+  }, [])
 
   const prevConnected = useRef(false)
 
@@ -115,61 +174,34 @@ function VoiceApp() {
     if (isConnecting) { setAgentState('connecting'); return }
     if (!isConnected) {
       setAgentState('idle')
-      // Refresh sessions after a session ends
-      if (prevConnected.current) fetchSessions()
+      if (prevConnected.current && currentCallId) {
+        // Call just ended: move to the disposition view and resolve insights.
+        setStage('disposition')
+        setLoadingInsights(true)
+        fetchInsightsWithRetry(currentCallId).then(result => {
+          setInsights(result)
+          setLoadingInsights(false)
+          fetchCalls()
+        })
+      }
     }
     prevConnected.current = isConnected
-  }, [isConnected, isConnecting])
-
-  // ── Session data ──────────────────────────────────────────────────────────
-
-  const fetchSessions = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/sessions`)
-      if (res.ok) setSessions(await res.json())
-    } catch { /* backend not yet running */ }
-  }, [])
-
-  useEffect(() => { fetchSessions() }, [fetchSessions])
-
-  const selectSession = useCallback(async (id: string) => {
-    setSelectedId(id)
-    try {
-      const res = await fetch(`${API_URL}/sessions/${id}/messages`)
-      if (res.ok) setHistMessages(await res.json())
-    } catch { setHistMessages([]) }
-  }, [])
-
-  const clearSelection = useCallback(() => {
-    setSelectedId(null)
-    setHistMessages([])
-  }, [])
+  }, [isConnected, isConnecting, currentCallId, fetchInsightsWithRetry, fetchCalls])
 
   // ── Live transcript scroll ────────────────────────────────────────────────
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, histMessages])
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-
-  const handleConnect = useCallback(async () => {
-    clearSelection()
-    try { await client?.connect({ wsUrl: WS_URL }) } catch (e) { console.error(e) }
-  }, [client, clearSelection])
-
-  const handleDisconnect = useCallback(async () => {
-    try { await client?.disconnect() } catch (e) { console.error(e) }
-  }, [client])
+  }, [messages])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   const statusMap: Record<AgentState, string> = {
-    idle:       'Ready to connect',
+    idle: 'Ready to connect',
     connecting: 'Connecting…',
-    listening:  'Listening',
-    thinking:   'Thinking…',
-    speaking:   'Speaking',
+    listening: 'Listening',
+    thinking: 'Thinking…',
+    speaking: 'Speaking',
   }
 
   const botBarColor = agentState === 'speaking' ? '#a78bfa' : '#6366f1'
@@ -180,26 +212,28 @@ function VoiceApp() {
       {/* ── Nav ─────────────────────────────────────── */}
       <header className="nav">
         <div className="nav-brand">
-          <button
-            className="sidebar-toggle"
-            onClick={() => setSidebarOpen(o => !o)}
-            title="Toggle history"
-          >
+          <button className="sidebar-toggle" onClick={() => setSidebarOpen(o => !o)} title="Toggle history">
             <MenuIcon />
           </button>
           <OrbIcon />
-          <span className="nav-title">Voice AI</span>
+          <span className="nav-title">Colca AI</span>
         </div>
+
+        {!viewingHistory && (
+          <nav className="stage-nav">
+            <StageStep label="Brief" active={stage === 'brief'} done={stage !== 'brief'} />
+            <span className="stage-sep">/</span>
+            <StageStep label="On the line" active={stage === 'call'} done={stage === 'disposition'} />
+            <span className="stage-sep">/</span>
+            <StageStep label="Disposition" active={stage === 'disposition'} done={false} />
+          </nav>
+        )}
+
         <div className="nav-actions">
-          {isConnected ? (
+          {isConnected && (
             <button className="btn-end" onClick={handleDisconnect}>
               <PhoneOffIcon />
-              End Session
-            </button>
-          ) : (
-            <button className="btn-start" onClick={handleConnect} disabled={isConnecting}>
-              {isConnecting ? <SpinnerIcon /> : <PhoneIcon />}
-              {isConnecting ? 'Connecting…' : 'Start Session'}
+              End call
             </button>
           )}
         </div>
@@ -207,71 +241,49 @@ function VoiceApp() {
 
       {/* ── Body ────────────────────────────────────── */}
       <div className="body">
-
-        {/* ── Sidebar ───────────────────────────────── */}
-        <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-          <div className="sidebar-head">
-            <span className="sidebar-title">History</span>
-            {sessions.length > 0 && (
-              <span className="sidebar-count">{sessions.length}</span>
-            )}
-          </div>
-
-          {sessions.length === 0 ? (
-            <div className="sidebar-empty">No sessions yet</div>
-          ) : (
-            <ul className="session-list">
-              {sessions.map(s => (
-                <li key={s.id}>
-                  <button
-                    className={`session-item ${selectedId === s.id ? 'active' : ''}`}
-                    onClick={() => selectSession(s.id)}
-                  >
-                    <span className="session-item-title">{s.title}</span>
-                    <span className="session-item-date">{formatDate(s.created_at)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
+        <HistorySidebar
+          calls={calls}
+          selectedId={selectedId}
+          sidebarOpen={sidebarOpen}
+          onSelect={viewHistoricalCall}
+        />
 
         {/* ── Main ──────────────────────────────────── */}
         <main className="main">
-
           {viewingHistory ? (
-            /* ── Historical view ───────────────────── */
-            <div className="history-view">
-              <div className="history-head">
-                <button className="back-btn" onClick={clearSelection}>
-                  <ChevronLeftIcon />
-                  Back to live
-                </button>
-                <span className="history-title">
-                  {sessions.find(s => s.id === selectedId)?.title ?? 'Session'}
-                </span>
-              </div>
-              <div className="transcript">
-                <div className="transcript-label">Transcript</div>
-                <div className="transcript-body">
-                  {histMessages.length === 0 ? (
-                    <div className="transcript-empty">No messages in this session.</div>
-                  ) : (
-                    histMessages.map((m, i) => (
-                      <div key={i} className={`turn ${m.role === 'user' ? 'user' : 'bot'}`}>
-                        <span className="turn-role">{m.role === 'user' ? 'You' : 'AI'}</span>
-                        <span className="turn-text">{m.content}</span>
-                      </div>
-                    ))
-                  )}
-                  <div ref={transcriptEndRef} />
-                </div>
-              </div>
-            </div>
+            <HistoricalView
+              callId={selectedId}
+              insights={histInsights}
+              onBack={clearHistorySelection}
+            />
+          ) : stage === 'brief' ? (
+            <BriefForm onStart={handleStart} starting={starting} error={startError} />
+          ) : stage === 'disposition' ? (
+            loadingInsights || !insights ? (
+              <div className="hint">Wrapping up the call and generating insights…</div>
+            ) : (
+              <DispositionPanel insights={insights} onNewCall={handleNewCall} />
+            )
           ) : (
-            /* ── Live voice view ───────────────────── */
+            /* ── On the line ────────────────────────── */
             <>
-              {/* Visualizer card */}
+              {currentBrief && (
+                <div className="call-meta">
+                  <span className="call-item-led">
+                    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--indigo)', boxShadow: '0 0 8px var(--indigo)' }} />
+                  </span>
+                  <span className="call-meta-name">{currentBrief.lead_name}</span>
+                  <span className="call-meta-sep">·</span>
+                  <span className="call-meta-num">{currentBrief.company_name}</span>
+                  {currentBrief.phone_number && (
+                    <>
+                      <span className="call-meta-sep">·</span>
+                      <span className="call-meta-num">{currentBrief.phone_number}</span>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className={`viz-card state-${agentState}`}>
                 <div className="viz-bot-wrap">
                   <div className={`viz-bot-ring state-${agentState}`}>
@@ -325,25 +337,14 @@ function VoiceApp() {
                 </div>
               </div>
 
-              {/* Mic toggle */}
               <PipecatClientMicToggle disabled={!isConnected}>
                 {({ disabled, isMicEnabled, onClick }) => (
-                  <button
-                    className={`mic-btn ${isMicEnabled ? 'on' : 'off'}`}
-                    onClick={onClick}
-                    disabled={disabled}
-                  >
+                  <button className={`mic-btn ${isMicEnabled ? 'on' : 'off'}`} onClick={onClick} disabled={disabled}>
                     {isMicEnabled ? <MicOnIcon /> : <MicOffIcon />}
                     {isMicEnabled ? 'Microphone On' : 'Microphone Muted'}
                   </button>
                 )}
               </PipecatClientMicToggle>
-
-              {!isConnected && !isConnecting && messages.length === 0 && (
-                <p className="hint">
-                  Press <strong>Start Session</strong> to begin your voice conversation.
-                </p>
-              )}
 
               {messages.length > 0 && (
                 <section className="transcript">
@@ -384,6 +385,43 @@ function VoiceApp() {
   )
 }
 
+// ── Historical call view ────────────────────────────────────────────────────
+
+function HistoricalView({
+  callId,
+  insights,
+  onBack,
+}: {
+  callId: string | null
+  insights: CallInsights | null
+  onBack: () => void
+}) {
+  return (
+    <div className="history-view">
+      <div className="history-head">
+        <button className="back-btn" onClick={onBack}>
+          <ChevronLeftIcon />
+          Back to live
+        </button>
+        <span className="history-title">{callId}</span>
+      </div>
+      {insights ? (
+        <DispositionPanel insights={insights} onNewCall={onBack} />
+      ) : (
+        <div className="transcript-empty">No insights found for this call.</div>
+      )}
+    </div>
+  )
+}
+
+// ── Stage step chip ──────────────────────────────────────────────────────────
+
+function StageStep({ label, active, done }: { label: string; active: boolean; done: boolean }) {
+  return (
+    <span className={`stage-step ${active ? 'active' : ''} ${done ? 'done' : ''}`}>{label}</span>
+  )
+}
+
 // ── Small components ──────────────────────────────────────────────────────────
 
 function IdleBars({ count = 12, height = 6 }: { count?: number; height?: number }) {
@@ -419,7 +457,7 @@ function OrbIcon() {
 function MenuIcon() {
   return (
     <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
-      <line x1="3" y1="6"  x2="21" y2="6" />
+      <line x1="3" y1="6" x2="21" y2="6" />
       <line x1="3" y1="12" x2="21" y2="12" />
       <line x1="3" y1="18" x2="21" y2="18" />
     </svg>
@@ -430,14 +468,6 @@ function ChevronLeftIcon() {
   return (
     <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
       <polyline points="15 18 9 12 15 6" />
-    </svg>
-  )
-}
-
-function PhoneIcon() {
-  return (
-    <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-      <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.69 12 19.79 19.79 0 011.61 3.42 2 2 0 013.6 1.27h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.91 8.91a16 16 0 006.18 6.18l.91-.91a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
     </svg>
   )
 }
@@ -470,14 +500,6 @@ function MicOffIcon() {
       <path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23" />
       <line x1="12" y1="19" x2="12" y2="23" />
       <line x1="8" y1="23" x2="16" y2="23" />
-    </svg>
-  )
-}
-
-function SpinnerIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <path d="M21 12a9 9 0 11-6.22-8.56" style={{ animation: 'spin .8s linear infinite' }} />
     </svg>
   )
 }

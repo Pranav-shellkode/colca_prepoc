@@ -6,22 +6,39 @@ from backend.core.config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SE
 
 MODEL_ID = "us.anthropic.claude-sonnet-4-6"
 
+OUTCOME_CATEGORIES = [
+    "Interested",
+    "Not Interested",
+    "Follow-up Required",
+    "Meeting Booked",
+]
+
 SUMMARY_TOOL = {
     "toolSpec": {
         "name": "record_call_summary",
-        "description": "Record a structured summary of the sales call.",
+        "description": "Record a structured summary and key insights of the sales call.",
         "inputSchema": {
             "json": {
                 "type": "object",
                 "properties": {
                     "summary": {
                         "type": "string",
-                        "description": "A concise free-text summary of the call.",
+                        "description": "A concise free-text summary of the call, capturing conversation flow, key discussion points, and prospect responses.",
                     },
                     "key_points": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "The key points discussed during the call.",
+                    },
+                    "key_highlights": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Top highlights worth surfacing to a human reviewer (objections raised, buying signals, notable quotes, blockers).",
+                    },
+                    "outcome": {
+                        "type": "string",
+                        "enum": OUTCOME_CATEGORIES,
+                        "description": "The single call outcome category that best describes the result of the call.",
                     },
                     "meeting_booked": {
                         "type": "boolean",
@@ -44,6 +61,8 @@ SUMMARY_TOOL = {
                 "required": [
                     "summary",
                     "key_points",
+                    "key_highlights",
+                    "outcome",
                     "meeting_booked",
                     "meeting_time",
                     "lead_sentiment",
