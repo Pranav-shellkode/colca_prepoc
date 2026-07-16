@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, CardContent, Button, Input, Textarea } from '@pipecat-ai/voice-ui-kit'
+import { Card, CardContent, Input, Textarea } from '@pipecat-ai/voice-ui-kit'
 import type { LeadBrief } from '../api'
 
 const EMPTY_BRIEF: LeadBrief = {
@@ -118,17 +118,25 @@ export default function BriefForm({ onStart, starting, error }: BriefFormProps) 
           </div>
 
           <div className="brief-actions">
-            <Button
-              size="lg"
+            <button
+              className="btn-primary"
               disabled={!canStart || starting}
-              isLoading={starting}
               onClick={() => onStart(brief)}
             >
+              {starting && <SpinnerIcon />}
               {starting ? 'Preparing call…' : 'Start call'}
-            </Button>
+            </button>
           </div>
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function SpinnerIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <path d="M21 12a9 9 0 11-6.22-8.56" style={{ animation: 'spin .8s linear infinite' }} />
+    </svg>
   )
 }

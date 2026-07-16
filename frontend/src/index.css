@@ -6,26 +6,32 @@
   --font-head: 'Sora', 'Inter', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
 
-  --bg:          #0a0b0f;
-  --surface:     #111318;
-  --surface-2:   #181b23;
-  --surface-3:   #1f2330;
-  --border:      rgba(148, 163, 184, 0.1);
-  --border-light: rgba(148, 163, 184, 0.06);
+  --bg:          #00090d;
+  --surface:     #06232d;
+  --surface-2:   #0d2e39;
+  --surface-3:   #143b47;
+  --border:      rgba(166, 214, 214, 0.12);
+  --border-light: rgba(166, 214, 214, 0.07);
 
-  --indigo:      #6366f1;
-  --violet:      #8b5cf6;
-  --indigo-glow: rgba(99, 102, 241, 0.28);
-  --violet-glow: rgba(139, 92, 246, 0.22);
+  /* Colca AI brand palette — pulled from colca.ai's shipped CSS and the
+     brand mark's own gradient (teal -> teal-green -> olive-gold) */
+  --teal:        #125373;
+  --teal-mid:    #2d7f74;
+  --gold:        #fcc057;
+  --olive:       #a6a65d;
+  --indigo:      var(--teal-mid);
+  --violet:      var(--gold);
+  --indigo-glow: rgba(45, 127, 116, 0.32);
+  --violet-glow: rgba(252, 192, 87, 0.24);
 
-  --text:        #f1f5f9;
-  --text-2:      #94a3b8;
-  --text-3:      #475569;
+  --text:        #f3f6f5;
+  --text-2:      #9db3b3;
+  --text-3:      #4f6b6b;
 
-  --green:       #22c55e;
-  --amber:       #f59e0b;
+  --green:       var(--teal-mid);
+  --amber:       var(--olive);
   --red:         #ef4444;
-  --slate-muted: #64748b;
+  --slate-muted: #5c7a7a;
 
   --r:    16px;
   --r-sm: 10px;
@@ -70,12 +76,10 @@ html, body, #root {
   gap: 10px;
 }
 
-.nav-title {
-  font-family: var(--font-head);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  color: var(--text);
+.nav-logo {
+  height: 34px;
+  width: auto;
+  display: block;
 }
 
 /* ── Stage eyebrow nav ───────────────────────────────────── */
@@ -100,8 +104,8 @@ html, body, #root {
   transition: color .2s, background .2s;
 }
 .stage-step.active {
-  color: #a5b4fc;
-  background: rgba(99,102,241,.1);
+  color: #7fd4c4;
+  background: rgba(45,127,116,.1);
 }
 .stage-step.done {
   color: var(--text-2);
@@ -258,7 +262,7 @@ html, body, #root {
   background: var(--surface-2);
 }
 .session-item.active {
-  background: rgba(99,102,241,.08);
+  background: rgba(45,127,116,.08);
   border-left-color: var(--indigo);
 }
 
@@ -271,7 +275,7 @@ html, body, #root {
   text-overflow: ellipsis;
   width: 100%;
 }
-.session-item.active .session-item-title { color: #a5b4fc; }
+.session-item.active .session-item-title { color: #7fd4c4; }
 
 .session-item-date {
   font-size: 11px;
@@ -347,12 +351,12 @@ html, body, #root {
 }
 
 .viz-card.state-listening {
-  border-color: rgba(99,102,241,.3);
-  box-shadow: 0 0 40px rgba(99,102,241,.12);
+  border-color: rgba(45,127,116,.3);
+  box-shadow: 0 0 40px rgba(45,127,116,.12);
 }
 .viz-card.state-speaking {
-  border-color: rgba(139,92,246,.4);
-  box-shadow: 0 0 50px rgba(139,92,246,.18);
+  border-color: rgba(252,192,87,.4);
+  box-shadow: 0 0 50px rgba(252,192,87,.18);
 }
 .viz-card.state-thinking {
   border-color: rgba(245,158,11,.25);
@@ -382,12 +386,12 @@ html, body, #root {
 }
 
 .viz-bot-ring.state-speaking {
-  border-color: rgba(139,92,246,.5);
-  box-shadow: 0 0 28px rgba(139,92,246,.25), inset 0 0 20px rgba(139,92,246,.06);
+  border-color: rgba(252,192,87,.5);
+  box-shadow: 0 0 28px rgba(252,192,87,.25), inset 0 0 20px rgba(252,192,87,.06);
 }
 .viz-bot-ring.state-listening {
-  border-color: rgba(99,102,241,.35);
-  box-shadow: 0 0 20px rgba(99,102,241,.15);
+  border-color: rgba(45,127,116,.35);
+  box-shadow: 0 0 20px rgba(45,127,116,.15);
 }
 .viz-bot-ring.state-thinking {
   border-color: rgba(245,158,11,.3);
@@ -460,9 +464,9 @@ html, body, #root {
   gap: 5px;
   padding: 3px 10px;
   border-radius: 20px;
-  background: rgba(99,102,241,.12);
-  border: 1px solid rgba(99,102,241,.25);
-  color: #a5b4fc;
+  background: rgba(45,127,116,.12);
+  border: 1px solid rgba(45,127,116,.25);
+  color: #7fd4c4;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .3px;
@@ -522,15 +526,15 @@ html, body, #root {
 }
 
 .mic-btn.on {
-  background: rgba(99,102,241,.15);
-  border: 1px solid rgba(99,102,241,.35);
-  color: #a5b4fc;
-  box-shadow: 0 0 24px rgba(99,102,241,.15);
+  background: rgba(45,127,116,.15);
+  border: 1px solid rgba(45,127,116,.35);
+  color: #7fd4c4;
+  box-shadow: 0 0 24px rgba(45,127,116,.15);
 }
 .mic-btn.on:hover:not(:disabled) {
-  background: rgba(99,102,241,.22);
-  border-color: rgba(99,102,241,.55);
-  box-shadow: 0 0 32px rgba(99,102,241,.22);
+  background: rgba(45,127,116,.22);
+  border-color: rgba(45,127,116,.55);
+  box-shadow: 0 0 32px rgba(45,127,116,.22);
 }
 
 .mic-btn.off {
@@ -618,7 +622,7 @@ html, body, #root {
   flex-shrink: 0;
 }
 
-.turn.bot .turn-role  { color: #818cf8; }
+.turn.bot .turn-role  { color: #5fb8ab; }
 .turn.user .turn-role { color: var(--text-3); }
 
 .turn-text {
@@ -634,7 +638,7 @@ html, body, #root {
 }
 
 .turn.bot .turn-text {
-  border-color: rgba(129,140,248,.12);
+  border-color: rgba(45,127,116,.18);
 }
 
 .unspoken { color: var(--text-3); }
@@ -680,6 +684,9 @@ html, body, #root {
   border: 1px solid var(--border) !important;
   border-radius: 20px !important;
 }
+.brief-card > [data-slot="card-content"] {
+  padding: 32px !important;
+}
 
 .brief-group {
   display: flex;
@@ -695,7 +702,7 @@ html, body, #root {
   font-weight: 700;
   letter-spacing: 1.4px;
   text-transform: uppercase;
-  color: #a5b4fc;
+  color: #7fd4c4;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -730,10 +737,91 @@ html, body, #root {
   letter-spacing: 0.2px;
 }
 
+/* voice-ui-kit Input/Textarea ship light-mode-tinted backgrounds and
+   uncentered text metrics by default — restyle to match the app shell */
+.brief-field input,
+.brief-field textarea {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  font-family: var(--font) !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  height: auto !important;
+  padding: 10px 12px !important;
+  box-shadow: none !important;
+  transition: border-color .15s, background .15s;
+}
+.brief-field input::placeholder,
+.brief-field textarea::placeholder {
+  color: var(--text-3) !important;
+}
+.brief-field input:focus,
+.brief-field input:focus-visible,
+.brief-field textarea:focus,
+.brief-field textarea:focus-visible {
+  background: var(--surface-2) !important;
+  border-color: rgba(45,127,116,.5) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(45,127,116,.15) !important;
+}
+.brief-field input:autofill,
+.brief-field input:-webkit-autofill {
+  -webkit-text-fill-color: var(--text) !important;
+  box-shadow: 0 0 0 1000px var(--surface-2) inset !important;
+  caret-color: var(--text);
+}
+.brief-field textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
 .brief-actions {
   display: flex;
   justify-content: flex-end;
   margin-top: 24px;
+}
+
+/* ── Primary / outline buttons — matches the colca.ai gold CTA treatment ── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 26px;
+  border-radius: var(--r-sm);
+  border: none;
+  background: var(--gold);
+  color: #17140a;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  box-shadow: 0 0 24px var(--violet-glow);
+  transition: opacity .2s, transform .1s, box-shadow .2s;
+}
+.btn-primary:hover:not(:disabled) { opacity: .88; box-shadow: 0 0 36px var(--violet-glow); }
+.btn-primary:active:not(:disabled) { transform: scale(.97); }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 22px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background .2s, color .2s, border-color .2s;
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: rgba(166,214,214,.3);
 }
 
 .brief-error {

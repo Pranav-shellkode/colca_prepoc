@@ -1,4 +1,4 @@
-import { Card, CardContent, DataList, Button } from '@pipecat-ai/voice-ui-kit'
+import { Card, CardContent, DataList } from '@pipecat-ai/voice-ui-kit'
 import type { CallInsights } from '../api'
 import { dispositionStyle } from '../disposition'
 
@@ -95,7 +95,7 @@ export default function DispositionPanel({ insights, onNewCall }: DispositionPan
       </Card>
 
       <div className="disposition-actions">
-        <Button variant="outline" onClick={onNewCall}>Start another call</Button>
+        <button className="btn-outline" onClick={onNewCall}>Start another call</button>
       </div>
     </div>
   )

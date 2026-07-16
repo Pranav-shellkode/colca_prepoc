@@ -204,7 +204,7 @@ function VoiceApp() {
     speaking: 'Speaking',
   }
 
-  const botBarColor = agentState === 'speaking' ? '#a78bfa' : '#6366f1'
+  const botBarColor = agentState === 'speaking' ? '#fcc057' : '#2d7f74'
   const viewingHistory = selectedId !== null
 
   return (
@@ -215,8 +215,7 @@ function VoiceApp() {
           <button className="sidebar-toggle" onClick={() => setSidebarOpen(o => !o)} title="Toggle history">
             <MenuIcon />
           </button>
-          <OrbIcon />
-          <span className="nav-title">Colca AI</span>
+          <img src="/logo.svg" alt="Colca AI" className="nav-logo" />
         </div>
 
         {!viewingHistory && (
@@ -323,7 +322,7 @@ function VoiceApp() {
                     <VoiceVisualizer
                       participantType="local"
                       backgroundColor="transparent"
-                      barColor="#818cf8"
+                      barColor="#5fb8ab"
                       barCount={16}
                       barGap={3}
                       barWidth={3}
@@ -435,24 +434,6 @@ function IdleBars({ count = 12, height = 6 }: { count?: number; height?: number 
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
-
-function OrbIcon() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-      <defs>
-        <linearGradient id="og" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366f1" />
-          <stop offset="1" stopColor="#a78bfa" />
-        </linearGradient>
-      </defs>
-      <rect width="28" height="28" rx="9" fill="url(#og)" />
-      <rect x="11" y="7" width="6" height="10" rx="3" fill="white" />
-      <path d="M8 14a6 6 0 0012 0" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="14" y1="20" x2="14" y2="23" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="10" y1="23" x2="18" y2="23" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
-}
 
 function MenuIcon() {
   return (
