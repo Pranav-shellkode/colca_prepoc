@@ -60,9 +60,7 @@ async def health():
     }
 
 
-# ---------------------------------------------------------------------------
 # Pre-call data capture layer
-# ---------------------------------------------------------------------------
 @app.post("/calls/context", dependencies=[Depends(require_api_key)])
 async def create_call_context(payload: PreCallContextRequest):
     """
@@ -78,9 +76,7 @@ async def create_call_context(payload: PreCallContextRequest):
     return {"call_id": call_id}
 
 
-# ---------------------------------------------------------------------------
 # Call history — lightweight list for the frontend sidebar
-# ---------------------------------------------------------------------------
 @app.get("/calls", dependencies=[Depends(require_api_key)])
 async def list_recent_calls(limit: int = 50):
     try:

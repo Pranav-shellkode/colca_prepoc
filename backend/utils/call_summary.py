@@ -10,6 +10,8 @@ OUTCOME_CATEGORIES = [
     "Interested",
     "Not Interested",
     "Follow-up Required",
+    "Technical difficulties",
+    "Call interrupted", 
     "Meeting Booked",
 ]
 

@@ -1,6 +1,7 @@
 import asyncio
 import logging 
 import uuid 
+import boto3
 from datetime import datetime,timezone 
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer 
@@ -18,7 +19,7 @@ from pipecat.services.elevenlabs.tts import ElevenLabsTTSService,ElevenLabsTTSSe
 from pipecat.frames.frames import LLMMessagesAppendFrame 
 from pipecat.services.deepgram.stt import DeepgramSTTService,DeepgramSTTSettings
 from pipecat.services.deepgram.tts import DeepgramTTSService,DeepgramTTSSettings 
-
+from pipecat.services.aws.llm import AWSBedrockLLMService
 from backend.core.config import * 
 from backend.strands.agent import build_agent 
 from backend.strands.prompt import colca_sales_agent_prompt
@@ -44,9 +45,9 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
 
 
     # stt service 
-    # deepgram_stt = DeepgramSTTService(
-    #     api_key=DEEPGRAM_API_KEY
-    # )
+    deepgram_stt = DeepgramSTTService(
+        api_key=DEEPGRAM_API_KEY
+    )
 
     elevenlabs_stt = ElevenLabsRealtimeSTTService(
         api_key=ELEVENLABS_API_KEY,
@@ -54,9 +55,9 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     )
 
     # tts service 
-    # deepgram_tts = DeepgramTTSService(
-    #     api_key=DEEPGRAM_API_KEY,
-    # )
+    deepgram_tts = DeepgramTTSService(
+        api_key=DEEPGRAM_API_KEY,
+    )
 
     elevenlabs_tts = ElevenLabsTTSService(
         api_key=ELEVENLABS_API_KEY, 
@@ -74,10 +75,10 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     # VAD detection 
     vad_analyzer = SileroVADAnalyzer(
     params=VADParams(
-        confidence=0.7,      # Minimum confidence for voice detection
-        start_secs=0.2,      # Time to wait before confirming speech start
-        stop_secs=0.2,       # Time to wait before confirming speech stop
-        min_volume=0.6,      # Minimum volume threshold
+        confidence=0.7,      
+        start_secs=0.2,      
+        stop_secs=0.2,       
+        min_volume=0.6,      
     )
     )
 
@@ -102,10 +103,10 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     # main pipeline 
     pipeline = Pipeline([
         transport.input() , 
-        elevenlabs_stt, 
+        deepgram_stt, 
         context_aggregator.user() ,
         sales_agent , 
-        elevenlabs_tts , 
+        deepgram_tts , 
         transport.output() , 
         context_aggregator.assistant(), 
     ]
