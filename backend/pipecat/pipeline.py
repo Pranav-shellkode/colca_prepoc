@@ -19,7 +19,7 @@ from pipecat.services.elevenlabs.tts import ElevenLabsTTSService,ElevenLabsTTSSe
 from pipecat.frames.frames import LLMMessagesAppendFrame 
 from pipecat.services.deepgram.stt import DeepgramSTTService,DeepgramSTTSettings
 from pipecat.services.deepgram.tts import DeepgramTTSService,DeepgramTTSSettings 
-from pipecat.services.aws.llm import AWSBedrockLLMService
+from pipecat.services.aws.llm import AWSBedrockLLMService , AWSBedrockLLMSettings
 from backend.core.config import * 
 from backend.strands.agent import build_agent 
 from backend.strands.prompt import colca_sales_agent_prompt
@@ -69,8 +69,19 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     )
 
     # Agent service
-    agent = build_agent(lead_context=lead_context)
-    sales_agent = StrandsAgentsProcessor(agent=agent)
+    # agent = build_agent(lead_context=lead_context)
+    # sales_agent = StrandsAgentsProcessor(agent=agent)
+
+    aws_llm = AWSBedrockLLMService(
+        model="us.anthropic.claude-sonnet-4-6", 
+        aws_access_key=AWS_ACCESS_KEY_ID, 
+        aws_secret_key=AWS_SECRET_ACCESS_KEY, 
+        aws_session_token=AWS_SESSION_TOKEN, 
+        aws_region=AWS_REGION , 
+        settings=AWSBedrockLLMSettings(
+            system_instruction=colca_sales_agent_prompt() ,
+        )
+    )
 
     # VAD detection 
     vad_analyzer = SileroVADAnalyzer(
@@ -100,13 +111,14 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
         ),
     )
 
+
     # main pipeline 
     pipeline = Pipeline([
         transport.input() , 
-        deepgram_stt, 
+        elevenlabs_stt, 
         context_aggregator.user() ,
-        sales_agent , 
-        deepgram_tts , 
+        sales_agent, 
+        elevenlabs_tts, 
         transport.output() , 
         context_aggregator.assistant(), 
     ]

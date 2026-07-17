@@ -13,6 +13,7 @@ ELEVENLABS_VOICE_ID=os.getenv("ELEVENLABS_VOICE_ID","")
 AWS_ACCESS_KEY_ID=os.getenv("aws_access_key_id","")
 AWS_SECRET_ACCESS_KEY=os.getenv("aws_secret_access_key") 
 AWS_SESSION_TOKEN=os.getenv("aws_session_token","")
+AWS_REGION="us-east-1"
 
 #POSTGRES 
 POSTGRES_URL=os.getenv("POSTGRES_URL")
