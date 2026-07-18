@@ -19,6 +19,27 @@ import BriefForm from './components/BriefForm'
 import DispositionPanel from './components/DispositionPanel'
 import HistorySidebar from './components/HistorySidebar'
 
+// The websocket transport's mic capture requests plain `{ audio: true }` with
+// no way to pass constraints through PipecatClientOptions. Without echo
+// cancellation, the bot's own TTS played back through speakers bleeds into
+// the mic and gets transcribed as fake user speech, stalling turn detection.
+if (navigator.mediaDevices?.getUserMedia) {
+  const nativeGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+  navigator.mediaDevices.getUserMedia = (constraints?: MediaStreamConstraints) => {
+    if (!constraints?.audio) return nativeGetUserMedia(constraints)
+    const audio = constraints.audio === true ? {} : constraints.audio
+    return nativeGetUserMedia({
+      ...constraints,
+      audio: {
+        ...audio,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+  }
+}
+
 const pcClient = new PipecatClient({
   transport: new WebSocketTransport({
     serializer: new ProtobufFrameSerializer(),

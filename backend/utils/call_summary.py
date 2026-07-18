@@ -4,7 +4,7 @@ import boto3
 
 from backend.core.config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
 
-MODEL_ID = "us.anthropic.claude-sonnet-4-6"
+MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 OUTCOME_CATEGORIES = [
     "Interested",

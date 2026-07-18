@@ -23,6 +23,7 @@ from backend.pipecat.pipeline import build_pipeline
 from backend.utils.lead_context import condition_lead_context
 from backend.utils.call_store import get_call_insights, list_calls
 from backend.server.models import PreCallContextRequest
+from backend.agents.tools.retrieval_tool import retrieve_colca_faq
 
 logger = logging.getLogger("uvicorn.error")
 

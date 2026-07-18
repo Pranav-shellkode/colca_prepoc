@@ -1,9 +1,9 @@
 import boto3
 from strands import Agent 
 from strands.models import BedrockModel 
-from backend.strands.prompt import colca_sales_agent_prompt 
+from backend.agents.prompt import colca_sales_agent_prompt 
 from backend.core.config import * 
-from backend.strands.tools.retrieval_tool import retrieve_colca_faq
+from backend.agents.tools.retrieval_tool import retrieve_colca_faq
 
 def build_agent(lead_context: dict | None = None) -> Agent:
 

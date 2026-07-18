@@ -4,27 +4,30 @@ import uuid
 import boto3
 from datetime import datetime,timezone 
 
-from pipecat.audio.vad.silero import SileroVADAnalyzer 
-from pipecat.audio.vad.vad_analyzer import VADParams , VADAnalyzer  
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams , VADAnalyzer
+from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
+from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
+from pipecat.transcriptions.language import Language
 from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.worker import PipelineParams , PipelineWorker 
-from pipecat.processors.aggregators.llm_context import LLMContext 
+from pipecat.pipeline.worker import PipelineParams , PipelineWorker
+from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair , LLMAssistantAggregatorParams , LLMUserAggregatorParams
 )
-from pipecat.turns.user_mute import AlwaysUserMuteStrategy
-from pipecat.processors.frameworks.strands_agents import StrandsAgentsProcessor 
-from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService,CommitStrategy
-from pipecat.services.elevenlabs.tts import ElevenLabsTTSService,ElevenLabsTTSSettings 
-from pipecat.frames.frames import LLMMessagesAppendFrame 
-from pipecat.services.deepgram.stt import DeepgramSTTService,DeepgramSTTSettings
-from pipecat.services.deepgram.tts import DeepgramTTSService,DeepgramTTSSettings 
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
+from pipecat.turns.user_start import VADUserTurnStartStrategy
+from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.services.aws.llm import AWSBedrockLLMService , AWSBedrockLLMSettings
-from backend.core.config import * 
-from backend.strands.agent import build_agent 
-from backend.strands.prompt import colca_sales_agent_prompt
+from pipecat.turns.user_mute import AlwaysUserMuteStrategy
+from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService,CommitStrategy,ElevenLabsRealtimeSTTSettings
+from pipecat.services.elevenlabs.tts import ElevenLabsTTSService,ElevenLabsTTSSettings  
+from pipecat.frames.frames import LLMMessagesAppendFrame
+from backend.core.config import *
+from backend.agents.prompt import colca_sales_agent_prompt
 from backend.utils.call_summary import summarize_call
 from backend.utils.call_store import save_call_summary
+from backend.agents.tools.retrieval_tool import retrieve_colca_faq
 
 logger = logging.getLogger(__name__) 
 
@@ -44,19 +47,14 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     phone_number = (lead_context or {}).get("phone_number")
 
 
-    # stt service 
-    deepgram_stt = DeepgramSTTService(
-        api_key=DEEPGRAM_API_KEY
-    )
-
     elevenlabs_stt = ElevenLabsRealtimeSTTService(
         api_key=ELEVENLABS_API_KEY,
-        commit_strategy=CommitStrategy.MANUAL,
-    )
-
-    # tts service 
-    deepgram_tts = DeepgramTTSService(
-        api_key=DEEPGRAM_API_KEY,
+        commit_strategy=CommitStrategy.VAD,
+        settings=ElevenLabsRealtimeSTTSettings(
+            language=Language.EN,
+            vad_silence_threshold_secs=1.0 , 
+            vad_threshold=0.3, 
+        )
     )
 
     elevenlabs_tts = ElevenLabsTTSService(
@@ -68,18 +66,17 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
         )
     )
 
-    # Agent service
-    # agent = build_agent(lead_context=lead_context)
-    # sales_agent = StrandsAgentsProcessor(agent=agent)
+    system_prompt = colca_sales_agent_prompt(lead_context)
 
     aws_llm = AWSBedrockLLMService(
-        model="us.anthropic.claude-sonnet-4-6", 
-        aws_access_key=AWS_ACCESS_KEY_ID, 
-        aws_secret_key=AWS_SECRET_ACCESS_KEY, 
-        aws_session_token=AWS_SESSION_TOKEN, 
-        aws_region=AWS_REGION , 
+        model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        aws_access_key=AWS_ACCESS_KEY_ID,
+        aws_secret_key=AWS_SECRET_ACCESS_KEY,
+        aws_session_token=AWS_SESSION_TOKEN,
+        aws_region=AWS_REGION,
         settings=AWSBedrockLLMSettings(
-            system_instruction=colca_sales_agent_prompt() ,
+            system_instruction=system_prompt,
+            enable_prompt_caching=True,
         )
     )
 
@@ -93,22 +90,22 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     )
     )
 
-    system_prompt = colca_sales_agent_prompt(lead_context)
-
     context = LLMContext(
-        messages=[{
-            "role" : "system" ,
-            "content" : system_prompt, 
-        }]
+        tools=[retrieve_colca_faq] ,
     )
 
-    # try it out later replace with the other format
-    context_aggregator = LLMContextAggregatorPair(
+    # AWS Bedrock (Claude) is a cascade (text-based) LLM, not a realtime one,
+    # so the user message it sees comes from the aggregated transcript —
+    # turn-stop must keep wait_for_transcript=True or a turn could finalize
+    # before any transcript arrives, pushing an empty user message. What we
+    # tighten instead is the turn analyzer's own silence fallback (defaults
+    # to 3s) and restrict turn-start to VAD only, since a stray transcript
+    # (e.g. echo bleed) starting a turn with no real VAD signal behind it is
+    # what stalls things — that phantom turn then has to time out.
+    turn_analyzer = LocalSmartTurnAnalyzerV3(params=SmartTurnParams(stop_secs=0.8))
+
+    user_aggregator , assistant_aggregator = LLMContextAggregatorPair(
         context=context,
-        user_params=LLMUserAggregatorParams(
-            vad_analyzer=vad_analyzer,
-            user_mute_strategies=[AlwaysUserMuteStrategy()],
-        ),
     )
 
 
@@ -116,11 +113,11 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     pipeline = Pipeline([
         transport.input() , 
         elevenlabs_stt, 
-        context_aggregator.user() ,
-        sales_agent, 
+        user_aggregator , 
+        aws_llm, 
         elevenlabs_tts, 
         transport.output() , 
-        context_aggregator.assistant(), 
+        assistant_aggregator, 
     ]
     )
 
