@@ -2,9 +2,9 @@ import json
 
 import boto3
 
-from backend.core.config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
+from backend.core.config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, AWS_REGION
 
-MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 OUTCOME_CATEGORIES = [
     "Interested",
@@ -82,7 +82,7 @@ def _bedrock_client():
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         aws_session_token=AWS_SESSION_TOKEN,
     )
-    return session.client("bedrock-runtime")
+    return session.client("bedrock-runtime", region_name=AWS_REGION)
 
 
 def summarize_call(transcript: str) -> dict:

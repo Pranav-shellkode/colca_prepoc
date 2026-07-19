@@ -19,7 +19,7 @@ from pipecat.pipeline.runner import WorkerRunner
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
 
 from backend.core.config import BACKEND_API_KEY
-from backend.pipecat.pipeline import build_pipeline
+from backend.pipecat.pipeline import build_pipeline, build_kb_search_mixer 
 from backend.utils.lead_context import condition_lead_context
 from backend.utils.call_store import get_call_insights, list_calls
 from backend.server.models import PreCallContextRequest
@@ -148,6 +148,7 @@ async def websocket_endpoint(websocket : WebSocket, call_id: str | None = None):
             audio_out_sample_rate=16000,
             audio_in_channels=1,
             audio_out_channels=1 ,
+            audio_out_mixer=build_kb_search_mixer(),
         ),
     )
 

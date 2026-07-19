@@ -4,11 +4,8 @@ import uuid
 import boto3
 from datetime import datetime,timezone 
 
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.audio.vad.vad_analyzer import VADParams , VADAnalyzer
-from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
-from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.transcriptions.language import Language
+from pipecat.audio.mixers.soundfile_mixer import SoundfileMixer
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams , PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -16,13 +13,15 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair , LLMAssistantAggregatorParams , LLMUserAggregatorParams
 )
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
-from pipecat.turns.user_start import VADUserTurnStartStrategy
-from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
+from pipecat.turns.user_start import MinWordsUserTurnStartStrategy
+from pipecat.turns.user_stop import SpeechTimeoutUserTurnStopStrategy
 from pipecat.services.aws.llm import AWSBedrockLLMService , AWSBedrockLLMSettings
-from pipecat.turns.user_mute import AlwaysUserMuteStrategy
 from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService,CommitStrategy,ElevenLabsRealtimeSTTSettings
-from pipecat.services.elevenlabs.tts import ElevenLabsTTSService,ElevenLabsTTSSettings  
-from pipecat.frames.frames import LLMMessagesAppendFrame
+from pipecat.services.elevenlabs.tts import ElevenLabsTTSService,ElevenLabsTTSSettings
+from pipecat.frames.frames import LLMMessagesAppendFrame, TTSSpeakFrame, MixerEnableFrame
+from pipecat.processors.aggregators import async_tool_messages
+
+
 from backend.core.config import *
 from backend.agents.prompt import colca_sales_agent_prompt
 from backend.utils.call_summary import summarize_call
@@ -30,6 +29,20 @@ from backend.utils.call_store import save_call_summary
 from backend.agents.tools.retrieval_tool import retrieve_colca_faq
 
 logger = logging.getLogger(__name__) 
+
+def build_kb_search_mixer() -> SoundfileMixer:
+    """A fresh mixer per call — SoundfileMixer holds live per-call playback
+    state (whether it's mixing, its position in the sound file), so sharing
+    one instance across concurrent calls would leak one call's KB-search
+    sound into every other call using the same mixer."""
+    return SoundfileMixer(
+        sound_files={
+            "typing": "backend/assets/kb_search_audio.wav",
+        },
+        default_sound="typing",
+        volume=0.4,
+        mixing=False,
+    )
 
 async def build_pipeline(transport, call_id: str | None = None, lead_context: dict | None = None):
     """
@@ -47,13 +60,22 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
     phone_number = (lead_context or {}).get("phone_number")
 
 
+    # ElevenLabs' own server-side VAD drives speech segmentation end to end —
+    # no local Pipecat VAD analyzer runs alongside it, so there's only one
+    # noise-sensitivity knob to tune instead of two fighting each other.
+    # vad_threshold is *inverted* (lower = more sensitive), so it's raised
+    # well above the ElevenLabs default to reject background noise; longer
+    # min_speech/min_silence durations reject brief noise blips and require
+    # a real pause before committing a segment.
     elevenlabs_stt = ElevenLabsRealtimeSTTService(
         api_key=ELEVENLABS_API_KEY,
         commit_strategy=CommitStrategy.VAD,
         settings=ElevenLabsRealtimeSTTSettings(
             language=Language.EN,
-            vad_silence_threshold_secs=1.0 , 
-            vad_threshold=0.3, 
+            vad_threshold=0.7,
+            vad_silence_threshold_secs=0.4,
+            min_speech_duration_ms=250,
+            min_silence_duration_ms=400,
         )
     )
 
@@ -80,32 +102,29 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
         )
     )
 
-    # VAD detection 
-    vad_analyzer = SileroVADAnalyzer(
-    params=VADParams(
-        confidence=0.7,      
-        start_secs=0.2,      
-        stop_secs=0.2,       
-        min_volume=0.6,      
-    )
-    )
-
     context = LLMContext(
         tools=[retrieve_colca_faq] ,
     )
 
-    # AWS Bedrock (Claude) is a cascade (text-based) LLM, not a realtime one,
-    # so the user message it sees comes from the aggregated transcript —
-    # turn-stop must keep wait_for_transcript=True or a turn could finalize
-    # before any transcript arrives, pushing an empty user message. What we
-    # tighten instead is the turn analyzer's own silence fallback (defaults
-    # to 3s) and restrict turn-start to VAD only, since a stray transcript
-    # (e.g. echo bleed) starting a turn with no real VAD signal behind it is
-    # what stalls things — that phantom turn then has to time out.
-    turn_analyzer = LocalSmartTurnAnalyzerV3(params=SmartTurnParams(stop_secs=0.8))
-
+    # No local Pipecat VAD analyzer is used — turn detection is driven purely
+    # by ElevenLabs' committed transcripts. MinWordsUserTurnStartStrategy
+    # requires several words to interrupt the bot mid-speech (a stray noise
+    # blip or "mm-hmm" backchannel won't cut the bot off) but still lets a
+    # real interruption ("stop", "wait", a full sentence) through — unlike
+    # AlwaysUserMuteStrategy, which was tried here first but blocks ALL mic
+    # input while the bot talks, including genuine "stop" commands. Only a
+    # single word is needed to start a turn when the bot is silent, so normal
+    # replies aren't delayed. SpeechTimeoutUserTurnStopStrategy's fallback
+    # path (no VAD frames arrive here) treats a quiet period after the last
+    # transcript as end-of-turn.
     user_aggregator , assistant_aggregator = LLMContextAggregatorPair(
         context=context,
+        user_params=LLMUserAggregatorParams(
+            user_turn_strategies=UserTurnStrategies(
+                start=[MinWordsUserTurnStartStrategy(min_words=3)],
+                stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=0.8)],
+            ),
+        ),
     )
 
 
@@ -144,8 +163,19 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
         logger.info("client disconnected")
         msgs = context.get_messages()
 
+        # Async tool-call bookkeeping messages (role "tool"/"developer" with a
+        # JSON-encoded {"type": "async_tool", ...} payload in `content`) are
+        # protocol plumbing for the LLM, not conversation — async_tool_messages
+        # is pipecat's own parser for this shape, since `type` lives inside the
+        # JSON string, not as a top-level key `m.get("type")` would ever see.
         transcript = "\n".join(
-            f"{m.get('role')}: {m.get('content')}" for m in msgs if m.get("role") != "system"
+            f"{m['role']}: {m['content']}"
+            for m in msgs
+            if (
+                m.get("role") != "system"
+                and async_tool_messages.parse_message(m) is None
+                and m.get("content") is not None
+            )
         )
         ended_at = datetime.now(timezone.utc).isoformat()
 
@@ -167,6 +197,20 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
             except Exception:
                 logger.exception(f"Failed to save call summary for call {call_id}")
     
+    @aws_llm.event_handler("on_function_calls_started")
+    async def on_function_calls_started(service,function_calls):
+        await elevenlabs_tts.queue_frame(TTSSpeakFrame("Let me check on that. Please hold",append_to_context=False))
+        await aws_llm.queue_frame(MixerEnableFrame(enable=True))
+
+    @user_aggregator.event_handler("on_user_turn_stop_timeout")
+    async def on_user_turn_stop_timeout(aggregator):
+        msg = {
+            "role" : "developer" , 
+            "content" : "Sorry I can't hear you , Politely ask if they are still there", 
+        } 
+        await aggregator.queue_frame(LLMMessagesAppendFrame([msg],run_llm=True))
+
+
     return pipeline , worker 
 
                                                                 

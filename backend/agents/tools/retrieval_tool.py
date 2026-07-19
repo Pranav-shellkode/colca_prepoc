@@ -1,9 +1,12 @@
+import asyncio
+
 from strands import tool
 from langchain_postgres import PGEngine, PGVectorStore
 from langchain_aws import BedrockEmbeddings
 from backend.core.config import *
 from pipecat.services.llm_service import FunctionCallParams
 from pipecat.adapters.schemas.direct_function import tool_options
+from pipecat.frames.frames import MixerEnableFrame
 
 TABLE_NAME = "colca_faq"
 
@@ -38,14 +41,22 @@ async def retrieve_colca_faq(params : FunctionCallParams , query: str, k: int = 
         A formatted string of the most relevant FAQ chunks, or a message
         indicating nothing relevant was found.
     """
-    results = _vector_store.similarity_search(query, k=k)
+    try:
+        # similarity_search is a blocking DB call; running it directly inside
+        # this coroutine would freeze the whole asyncio event loop for its
+        # duration — including the background task that queues the "let me
+        # check on that" phrase and the mixer-enable frame, so neither would
+        # play until the search had already finished.
+        results = await asyncio.to_thread(_vector_store.similarity_search, query, k=k)
 
-    if not results:
-        return "No relevant information found in the Colca AI FAQ knowledge base."
+        if not results:
+            return "No relevant information found in the Colca AI FAQ knowledge base."
 
-    formatted = []
-    for i, doc in enumerate(results, start=1):
-        formatted.append(f"[{i}] {doc.page_content.strip()}")
+        formatted = []
+        for i, doc in enumerate(results, start=1):
+            formatted.append(f"[{i}] {doc.page_content.strip()}")
 
-    result = "\n\n".join(formatted) 
-    await params.result_callback(result)
+        result = "\n\n".join(formatted)
+        await params.result_callback(result)
+    finally:
+        await params.llm.queue_frame(MixerEnableFrame(enable=False))

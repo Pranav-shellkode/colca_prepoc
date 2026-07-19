@@ -98,7 +98,7 @@ def get_call_insights(call_id: str) -> dict | None:
             return cur.fetchone()
 
 
-def list_calls(limit: int = 50) -> list[dict]:
+def list_calls(limit: int = 7) -> list[dict]:
     """List recent calls (lightest fields only) for a history sidebar."""
     with psycopg.connect(_DSN, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
