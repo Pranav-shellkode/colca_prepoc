@@ -13,12 +13,15 @@ const EMPTY_BRIEF: LeadBrief = {
 }
 
 interface BriefFormProps {
-  onStart: (brief: LeadBrief) => Promise<void>
+  // Connects the browser's own mic/speaker to the pipeline — no phone rings.
+  onStartBrowser: (brief: LeadBrief) => Promise<void>
+  // Places a real outbound call via Ozonetel to brief.phone_number.
+  onStartCall: (brief: LeadBrief) => Promise<void>
   starting: boolean
   error: string | null
 }
 
-export default function BriefForm({ onStart, starting, error }: BriefFormProps) {
+export default function BriefForm({ onStartBrowser, onStartCall, starting, error }: BriefFormProps) {
   const [brief, setBrief] = useState<LeadBrief>(EMPTY_BRIEF)
 
   const set = (field: keyof LeadBrief) => (
@@ -26,6 +29,7 @@ export default function BriefForm({ onStart, starting, error }: BriefFormProps) 
   ) => setBrief(b => ({ ...b, [field]: e.target.value }))
 
   const canStart = brief.lead_name.trim() !== '' && brief.company_name.trim() !== ''
+  const canCall = canStart && brief.phone_number.trim() !== ''
 
   return (
     <div className="brief-view">
@@ -119,12 +123,22 @@ export default function BriefForm({ onStart, starting, error }: BriefFormProps) 
 
           <div className="brief-actions">
             <button
-              className="btn-primary"
+              className="btn-outline"
               disabled={!canStart || starting}
-              onClick={() => onStart(brief)}
+              onClick={() => onStartBrowser(brief)}
+              title="Talk to the agent through your browser's mic/speaker — no phone rings"
             >
               {starting && <SpinnerIcon />}
-              {starting ? 'Preparing call…' : 'Start call'}
+              Test in browser
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!canCall || starting}
+              onClick={() => onStartCall(brief)}
+              title={canStart && !canCall ? 'Add a phone number to place a real call' : undefined}
+            >
+              {starting && <SpinnerIcon />}
+              {starting ? 'Dialing…' : 'Call this number'}
             </button>
           </div>
         </CardContent>

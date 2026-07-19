@@ -13,7 +13,14 @@ import {
 } from '@pipecat-ai/client-react'
 import { WebSocketTransport, ProtobufFrameSerializer } from '@pipecat-ai/websocket-transport'
 
-import { createCallContext, getCallInsights, listCalls, wsUrlForCall } from './api'
+import {
+  createCallContext,
+  createOzonetelCall,
+  getCallInsights,
+  hangupOzonetelCall,
+  listCalls,
+  wsUrlForCall,
+} from './api'
 import type { CallInsights, CallListItem, LeadBrief } from './api'
 import BriefForm from './components/BriefForm'
 import DispositionPanel from './components/DispositionPanel'
@@ -69,7 +76,11 @@ export default function App() {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type AgentState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking'
-type Stage = 'brief' | 'call' | 'disposition'
+// 'call' is the browser-mic session (Pipecat websocket in this tab).
+// 'dialing' is a real Ozonetel call — the audio is entirely between
+// Ozonetel and the backend, so this tab has no live transport state for it,
+// just a "call in progress" view that polls for the call to end.
+type Stage = 'brief' | 'call' | 'dialing' | 'disposition'
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -177,7 +188,25 @@ function VoiceApp() {
     []
   )
 
-  const handleStart = useCallback(async (brief: LeadBrief) => {
+  const goToDisposition = useCallback((callId: string) => {
+    setStage('disposition')
+    setLoadingInsights(true)
+    let summaryLanded = false
+    fetchInsightsUntilReady(callId, result => {
+      setInsights(result)
+      setLoadingInsights(false)
+      setSummaryPending(isSummaryPending(result))
+      if (!isSummaryPending(result) && !summaryLanded) {
+        summaryLanded = true
+        fetchCalls()
+      }
+    })
+  }, [fetchInsightsUntilReady, fetchCalls])
+
+  // Browser test path: connects this tab's mic/speaker straight to the
+  // pipeline over a websocket. Nothing rings — it's for trying out the
+  // agent without touching real telephony.
+  const handleStartBrowser = useCallback(async (brief: LeadBrief) => {
     setStarting(true)
     setStartError(null)
     try {
@@ -194,9 +223,34 @@ function VoiceApp() {
     }
   }, [client, clearHistorySelection])
 
+  // Real telephony path: Ozonetel dials brief.phone_number. The audio never
+  // touches this browser tab — Ozonetel bridges straight to the backend's
+  // /ws once the callee answers — so there's no transport to connect here,
+  // just a "call in progress" view (see the dialing-poll effect below).
+  const handleStartCall = useCallback(async (brief: LeadBrief) => {
+    setStarting(true)
+    setStartError(null)
+    try {
+      const { call_id } = await createOzonetelCall(brief)
+      setCurrentCallId(call_id)
+      setCurrentBrief(brief)
+      clearHistorySelection()
+      setStage('dialing')
+    } catch (e) {
+      setStartError(e instanceof Error ? e.message : 'Could not place the call.')
+    } finally {
+      setStarting(false)
+    }
+  }, [clearHistorySelection])
+
   const handleDisconnect = useCallback(async () => {
     try { await client?.disconnect() } catch (e) { console.error(e) }
   }, [client])
+
+  const handleHangup = useCallback(async () => {
+    if (!currentCallId) return
+    try { await hangupOzonetelCall(currentCallId) } catch (e) { console.error(e) }
+  }, [currentCallId])
 
   const handleNewCall = useCallback(() => {
     setStage('brief')
@@ -212,26 +266,38 @@ function VoiceApp() {
     if (!isConnected) {
       setAgentState('idle')
       if (prevConnected.current && currentCallId) {
-        // Call just ended: move to the disposition view right away. The
-        // pending row (transcript + basics) is usually already there by the
-        // time we ask, so this resolves almost instantly; the AI summary
-        // catches up a few seconds later via the polling loop below.
-        setStage('disposition')
-        setLoadingInsights(true)
-        let summaryLanded = false
-        fetchInsightsUntilReady(currentCallId, result => {
-          setInsights(result)
-          setLoadingInsights(false)
-          setSummaryPending(isSummaryPending(result))
-          if (!isSummaryPending(result) && !summaryLanded) {
-            summaryLanded = true
-            fetchCalls()
-          }
-        })
+        // Browser call just ended: move to the disposition view right away.
+        // The pending row (transcript + basics) is usually already there by
+        // the time we ask, so this resolves almost instantly; the AI
+        // summary catches up a few seconds later via the polling loop.
+        goToDisposition(currentCallId)
       }
     }
     prevConnected.current = isConnected
-  }, [isConnected, isConnecting, currentCallId, fetchInsightsUntilReady, fetchCalls])
+  }, [isConnected, isConnecting, currentCallId, goToDisposition])
+
+  // Dialing-poll: a real Ozonetel call has no websocket in this tab to
+  // watch, so instead poll for the call's insights row to appear at all —
+  // that only happens once the /ws pipeline session (answered call) or the
+  // /ozonetel/callback CDR (never answered) has run, i.e. the call is over.
+  useEffect(() => {
+    if (stage !== 'dialing' || !currentCallId) return
+    let cancelled = false
+    const callId = currentCallId
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          await getCallInsights(callId)
+          if (!cancelled) goToDisposition(callId)
+          return
+        } catch {
+          await new Promise(r => setTimeout(r, 3000))
+        }
+      }
+    }
+    poll()
+    return () => { cancelled = true }
+  }, [stage, currentCallId, goToDisposition])
 
   // ── Live transcript scroll ────────────────────────────────────────────────
 
@@ -267,7 +333,11 @@ function VoiceApp() {
           <nav className="stage-nav">
             <StageStep label="Brief" active={stage === 'brief'} done={stage !== 'brief'} />
             <span className="stage-sep">/</span>
-            <StageStep label="On the line" active={stage === 'call'} done={stage === 'disposition'} />
+            <StageStep
+              label={stage === 'dialing' ? 'Dialing' : 'On the line'}
+              active={stage === 'call' || stage === 'dialing'}
+              done={stage === 'disposition'}
+            />
             <span className="stage-sep">/</span>
             <StageStep label="Disposition" active={stage === 'disposition'} done={false} />
           </nav>
@@ -278,6 +348,12 @@ function VoiceApp() {
             <button className="btn-end" onClick={handleDisconnect}>
               <PhoneOffIcon />
               End call
+            </button>
+          )}
+          {stage === 'dialing' && (
+            <button className="btn-end" onClick={handleHangup}>
+              <PhoneOffIcon />
+              Hang up
             </button>
           )}
         </div>
@@ -301,7 +377,14 @@ function VoiceApp() {
               onBack={clearHistorySelection}
             />
           ) : stage === 'brief' ? (
-            <BriefForm onStart={handleStart} starting={starting} error={startError} />
+            <BriefForm
+              onStartBrowser={handleStartBrowser}
+              onStartCall={handleStartCall}
+              starting={starting}
+              error={startError}
+            />
+          ) : stage === 'dialing' ? (
+            <DialingView brief={currentBrief} onHangup={handleHangup} />
           ) : stage === 'disposition' ? (
             loadingInsights && !insights ? (
               <div className="hint">
@@ -441,6 +524,38 @@ function VoiceApp() {
   )
 }
 
+// ── Dialing view (real Ozonetel call, no browser transport) ────────────────
+
+function DialingView({ brief, onHangup }: { brief: LeadBrief | null; onHangup: () => void }) {
+  return (
+    <div className="dialing-view">
+      <div className="dialing-ring">
+        <PhoneRingIcon />
+      </div>
+      <h1 className="brief-heading">Calling {brief?.phone_number || 'the lead'}…</h1>
+      <p className="hint" style={{ maxWidth: 380 }}>
+        Ozonetel is placing the call. Once it's answered, the agent talks directly
+        over the phone line — there's nothing to hear in this tab. This view
+        updates automatically once the call ends.
+      </p>
+      {brief && (
+        <div className="call-meta">
+          <span className="call-item-led">
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--indigo)', boxShadow: '0 0 8px var(--indigo)' }} />
+          </span>
+          <span className="call-meta-name">{brief.lead_name}</span>
+          <span className="call-meta-sep">·</span>
+          <span className="call-meta-num">{brief.company_name}</span>
+        </div>
+      )}
+      <button className="btn-outline" onClick={onHangup}>
+        <PhoneOffIcon />
+        Hang up
+      </button>
+    </div>
+  )
+}
+
 // ── Historical call view ────────────────────────────────────────────────────
 
 function HistoricalView({
@@ -514,6 +629,14 @@ function ChevronLeftIcon() {
   return (
     <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
       <polyline points="15 18 9 12 15 6" />
+    </svg>
+  )
+}
+
+function PhoneRingIcon() {
+  return (
+    <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
     </svg>
   )
 }

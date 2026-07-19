@@ -302,6 +302,30 @@ html, body, #root {
   gap: 20px;
 }
 
+/* ── Dialing (real Ozonetel call, no browser transport) ──────────────── */
+.dialing-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  max-width: 420px;
+}
+
+.dialing-ring {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  border: 1px solid rgba(252,192,87,.35);
+  box-shadow: 0 0 28px rgba(252,192,87,.22), inset 0 0 20px rgba(252,192,87,.06);
+  animation: pulse-amber 1.2s ease-in-out infinite;
+  margin-bottom: 4px;
+}
+
 .history-head {
   display: flex;
   align-items: center;
@@ -783,6 +807,7 @@ html, body, #root {
 .brief-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
   margin-top: 24px;
 }
 

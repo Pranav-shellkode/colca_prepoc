@@ -79,6 +79,24 @@ export async function createCallContext(brief: LeadBrief): Promise<{ call_id: st
   return res.json()
 }
 
+// Places a real outbound call via Ozonetel — the phone actually rings.
+// Unlike createCallContext, this doesn't open a /ws connection itself:
+// Ozonetel dials the number, and once answered, hits the backend's
+// /ozonetel/hook webhook, which is what opens the media websocket. There's
+// nothing for the browser to connect to here.
+export async function createOzonetelCall(brief: LeadBrief): Promise<{ call_id: string }> {
+  const res = await fetch(`${API_URL}/ozonetel/calls`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(brief),
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null)
+    throw new Error(detail?.detail || `Failed to place the call (${res.status})`)
+  }
+  return res.json()
+}
+
 export async function listCalls(): Promise<CallListItem[]> {
   const res = await fetch(`${API_URL}/calls`, { headers: headers() })
   if (!res.ok) throw new Error(`Failed to list calls (${res.status})`)
@@ -89,6 +107,14 @@ export async function getCallInsights(callId: string): Promise<CallInsights> {
   const res = await fetch(`${API_URL}/calls/${callId}/insights`, { headers: headers() })
   if (!res.ok) throw new Error(`Failed to fetch insights (${res.status})`)
   return res.json()
+}
+
+export async function hangupOzonetelCall(callId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/ozonetel/calls/${callId}/hangup`, {
+    method: 'POST',
+    headers: headers(),
+  })
+  if (!res.ok) throw new Error(`Failed to hang up (${res.status})`)
 }
 
 export function wsUrlForCall(callId: string | null): string {
