@@ -25,7 +25,7 @@ from pipecat.processors.aggregators import async_tool_messages
 from backend.core.config import *
 from backend.agents.prompt import colca_sales_agent_prompt
 from backend.utils.call_summary import summarize_call
-from backend.utils.call_store import save_call_summary
+from backend.utils.call_store import save_call_summary, save_pending_call
 from backend.agents.tools.retrieval_tool import retrieve_colca_faq
 
 logger = logging.getLogger(__name__) 
@@ -125,6 +125,9 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
                 stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=0.8)],
             ),
         ),
+        assistant_params=LLMAssistantAggregatorParams(
+            enable_auto_context_summarization=True,
+        ),
     )
 
 
@@ -180,6 +183,26 @@ async def build_pipeline(transport, call_id: str | None = None, lead_context: di
         ended_at = datetime.now(timezone.utc).isoformat()
 
         if transcript.strip():
+            # Save what's known right away — the AI summary is a Bedrock
+            # round trip (15-20s) and the frontend shouldn't have to poll in
+            # the dark for that whole window. This makes the call show up in
+            # /calls and /calls/{id}/insights immediately with a "Pending"
+            # outcome; save_call_summary's upsert fills in outcome/summary
+            # below once ready.
+            try:
+                await asyncio.to_thread(
+                    save_pending_call,
+                    call_id,
+                    session_id,
+                    started_at,
+                    ended_at,
+                    transcript,
+                    phone_number,
+                    lead_context,
+                )
+            except Exception:
+                logger.exception(f"Failed to save pending call record for call {call_id}")
+
             try:
                 summary = await asyncio.to_thread(summarize_call, transcript)
                 await asyncio.to_thread(

@@ -90,6 +90,11 @@ function VoiceApp() {
   const [startError, setStartError] = useState<string | null>(null)
   const [insights, setInsights] = useState<CallInsights | null>(null)
   const [loadingInsights, setLoadingInsights] = useState(false)
+  // True while the disposition row exists but the AI summary hasn't landed
+  // yet (summarize_call is a ~15-20s Bedrock round trip) — drives the
+  // "Generating summary…" indicator inside DispositionPanel instead of
+  // blocking the whole view on it.
+  const [summaryPending, setSummaryPending] = useState(false)
 
   // History sidebar state
   const [calls, setCalls] = useState<CallListItem[]>([])
@@ -148,18 +153,29 @@ function VoiceApp() {
 
   // ── Call lifecycle: brief -> connect -> disposition ──────────────────────
 
-  const fetchInsightsWithRetry = useCallback(async (callId: string) => {
-    // The post-call summary is written asynchronously right after disconnect,
-    // so the row may not exist yet on the first read.
-    for (let attempt = 0; attempt < 6; attempt++) {
-      try {
-        return await getCallInsights(callId)
-      } catch {
-        await new Promise(r => setTimeout(r, 1500))
+  // The backend now saves a "pending" row (transcript + basics, no AI
+  // summary) synchronously right on disconnect, before it kicks off the
+  // ~15-20s Bedrock summarization call — so the very first read here almost
+  // always succeeds. A pending row has no outcome yet; poll every couple of
+  // seconds until the real summary lands, updating the disposition view in
+  // place instead of leaving the whole screen on a spinner.
+  const isSummaryPending = (i: CallInsights | null) => !!i && !i.outcome
+
+  const fetchInsightsUntilReady = useCallback(
+    async (callId: string, onUpdate: (insights: CallInsights | null) => void) => {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        try {
+          const result = await getCallInsights(callId)
+          onUpdate(result)
+          if (!isSummaryPending(result)) return
+        } catch {
+          if (attempt === 0) onUpdate(null)
+        }
+        await new Promise(r => setTimeout(r, attempt === 0 ? 500 : 2000))
       }
-    }
-    return null
-  }, [])
+    },
+    []
+  )
 
   const handleStart = useCallback(async (brief: LeadBrief) => {
     setStarting(true)
@@ -196,18 +212,26 @@ function VoiceApp() {
     if (!isConnected) {
       setAgentState('idle')
       if (prevConnected.current && currentCallId) {
-        // Call just ended: move to the disposition view and resolve insights.
+        // Call just ended: move to the disposition view right away. The
+        // pending row (transcript + basics) is usually already there by the
+        // time we ask, so this resolves almost instantly; the AI summary
+        // catches up a few seconds later via the polling loop below.
         setStage('disposition')
         setLoadingInsights(true)
-        fetchInsightsWithRetry(currentCallId).then(result => {
+        let summaryLanded = false
+        fetchInsightsUntilReady(currentCallId, result => {
           setInsights(result)
           setLoadingInsights(false)
-          fetchCalls()
+          setSummaryPending(isSummaryPending(result))
+          if (!isSummaryPending(result) && !summaryLanded) {
+            summaryLanded = true
+            fetchCalls()
+          }
         })
       }
     }
     prevConnected.current = isConnected
-  }, [isConnected, isConnecting, currentCallId, fetchInsightsWithRetry, fetchCalls])
+  }, [isConnected, isConnecting, currentCallId, fetchInsightsUntilReady, fetchCalls])
 
   // ── Live transcript scroll ────────────────────────────────────────────────
 
@@ -279,10 +303,22 @@ function VoiceApp() {
           ) : stage === 'brief' ? (
             <BriefForm onStart={handleStart} starting={starting} error={startError} />
           ) : stage === 'disposition' ? (
-            loadingInsights || !insights ? (
-              <div className="hint">Wrapping up the call and generating insights…</div>
+            loadingInsights && !insights ? (
+              <div className="hint">
+                <SpinnerIcon />
+                <span>Wrapping up the call…</span>
+              </div>
+            ) : insights ? (
+              <DispositionPanel
+                insights={insights}
+                summaryPending={summaryPending}
+                onNewCall={handleNewCall}
+              />
             ) : (
-              <DispositionPanel insights={insights} onNewCall={handleNewCall} />
+              <div className="hint">
+                Couldn't load this call's details. It may still be saving — check
+                the history sidebar in a moment.
+              </div>
             )
           ) : (
             /* ── On the line ────────────────────────── */
@@ -426,7 +462,7 @@ function HistoricalView({
         <span className="history-title">{callId}</span>
       </div>
       {insights ? (
-        <DispositionPanel insights={insights} onNewCall={onBack} />
+        <DispositionPanel insights={insights} summaryPending={!insights.outcome} onNewCall={onBack} />
       ) : (
         <div className="transcript-empty">No insights found for this call.</div>
       )}
@@ -443,6 +479,14 @@ function StageStep({ label, active, done }: { label: string; active: boolean; do
 }
 
 // ── Small components ──────────────────────────────────────────────────────────
+
+function SpinnerIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <path d="M21 12a9 9 0 11-6.22-8.56" style={{ animation: 'spin .8s linear infinite' }} />
+    </svg>
+  )
+}
 
 function IdleBars({ count = 12, height = 6 }: { count?: number; height?: number }) {
   return (

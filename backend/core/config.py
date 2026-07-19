@@ -28,4 +28,14 @@ BACKEND_API_KEY=os.getenv("BACKEND_API_KEY","")
 
 GROQ_API_KEY=os.getenv("GROQ_API_KEY")
 
+# Ozonetel outbound telephony
+OZONETEL_URL=os.getenv("OZONETEL_URL","http://in1-cpaas.ozonetel.com/outbound/outbound.php")
+OZONETEL_HANGUP_URL=os.getenv("OZONETEL_HANGUP_URL","https://in1-ccaas-api.ozonetel.com/api/v1/CallControl/Disconnect")
+OZONETEL_API_KEY=os.getenv("OZONETEL_API_KEY","")
+OZONETEL_SIP_NUMBER=os.getenv("OZONETEL_SIP_NUMBER","")
+OZONETEL_DID=os.getenv("OZONETEL_DID","")
+# Public host:port this server is reachable at, used to build the /ozonetel/hook,
+# /ozonetel/callback, and /ws URLs handed to Ozonetel (e.g. "1.2.3.4:8000").
+WEBHOOK_ENDPOINT=os.getenv("WEBHOOK_ENDPOINT","")
+
 

@@ -552,6 +552,10 @@ html, body, #root {
 
 /* ── Hint text ───────────────────────────────────────────── */
 .hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-size: 14px;
   color: var(--text-3);
   text-align: center;
@@ -953,6 +957,23 @@ html, body, #root {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ── History sidebar (calls) ─────────────────────────────── */

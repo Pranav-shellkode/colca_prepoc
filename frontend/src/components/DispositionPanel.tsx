@@ -14,9 +14,13 @@ function formatDuration(startedAt: string, endedAt: string): string {
 interface DispositionPanelProps {
   insights: CallInsights
   onNewCall: () => void
+  // True while the row is saved but the AI summary (a ~15-20s Bedrock call)
+  // hasn't landed yet — shows skeleton placeholders instead of leaving the
+  // summary/highlights/next-steps sections looking broken or empty.
+  summaryPending?: boolean
 }
 
-export default function DispositionPanel({ insights, onNewCall }: DispositionPanelProps) {
+export default function DispositionPanel({ insights, onNewCall, summaryPending }: DispositionPanelProps) {
   const style = dispositionStyle(insights.outcome)
   const lead = insights.lead_context
   const summary = insights.ai_summary
@@ -26,9 +30,9 @@ export default function DispositionPanel({ insights, onNewCall }: DispositionPan
     Company: lead?.company_name || '—',
     Line: insights.phone_number || '—',
     Duration: formatDuration(insights.started_at, insights.ended_at),
-    Sentiment: summary?.lead_sentiment || '—',
+    Sentiment: summaryPending ? '—' : summary?.lead_sentiment || '—',
   }
-  if (summary?.meeting_time) data['Meeting time'] = summary.meeting_time
+  if (!summaryPending && summary?.meeting_time) data['Meeting time'] = summary.meeting_time
 
   return (
     <div className="disposition-view">
@@ -41,8 +45,10 @@ export default function DispositionPanel({ insights, onNewCall }: DispositionPan
           className="disposition-badge"
           style={{ color: style.fg, background: style.bg, border: `1px solid ${style.border}` }}
         >
-          <span className="dot" style={{ background: style.dot, color: style.dot }} />
-          {style.label}
+          {summaryPending ? <SmallSpinner /> : (
+            <span className="dot" style={{ background: style.dot, color: style.dot }} />
+          )}
+          {summaryPending ? 'Generating summary…' : style.label}
         </span>
       </div>
 
@@ -55,10 +61,19 @@ export default function DispositionPanel({ insights, onNewCall }: DispositionPan
 
           <div className="disposition-section">
             <div className="disposition-section-label">Summary</div>
-            <p className="disposition-summary">{summary?.summary || 'No summary available.'}</p>
+            {summaryPending ? (
+              <SkeletonLines lines={3} />
+            ) : (
+              <p className="disposition-summary">{summary?.summary || 'No summary available.'}</p>
+            )}
           </div>
 
-          {summary?.key_highlights?.length > 0 && (
+          {summaryPending ? (
+            <div className="disposition-section">
+              <div className="disposition-section-label">Key highlights</div>
+              <SkeletonLines lines={2} />
+            </div>
+          ) : summary?.key_highlights?.length > 0 && (
             <div className="disposition-section">
               <div className="disposition-section-label">Key highlights</div>
               <div className="highlight-list">
@@ -69,7 +84,7 @@ export default function DispositionPanel({ insights, onNewCall }: DispositionPan
             </div>
           )}
 
-          {summary?.next_steps && (
+          {!summaryPending && summary?.next_steps && (
             <div className="disposition-section">
               <div className="disposition-section-label">Next steps</div>
               <p className="disposition-summary">{summary.next_steps}</p>
@@ -97,6 +112,24 @@ export default function DispositionPanel({ insights, onNewCall }: DispositionPan
       <div className="disposition-actions">
         <button className="btn-outline" onClick={onNewCall}>Start another call</button>
       </div>
+    </div>
+  )
+}
+
+function SmallSpinner() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+      <path d="M21 12a9 9 0 11-6.22-8.56" style={{ animation: 'spin .8s linear infinite' }} />
+    </svg>
+  )
+}
+
+function SkeletonLines({ lines }: { lines: number }) {
+  return (
+    <div className="skeleton-lines">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className="skeleton-line" style={{ width: i === lines - 1 ? '70%' : '100%' }} />
+      ))}
     </div>
   )
 }
