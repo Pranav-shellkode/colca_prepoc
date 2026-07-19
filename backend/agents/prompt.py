@@ -202,6 +202,7 @@ This is an outbound call. The following information about the prospect was provi
 * Company: {_or_unknown(lead_context.get('company_name'))}
 * Role: {_or_unknown(lead_context.get('role'))}
 * Industry: {_or_unknown(lead_context.get('industry'))}
+* Location: {_or_unknown(lead_context.get('location'))}
 * Relevant use case: {_or_unknown(lead_context.get('use_case'))}
 * Lead summary: {lead_context.get('lead_summary') or 'none provided'}
 

@@ -97,8 +97,6 @@ async def create_ozonetel_call(payload: PreCallContextRequest):
     triggers the dial — Ozonetel will hit /ozonetel/hook once the callee
     answers, which hands this call_id to the pipeline via the /ws stream URL.
     """
-    if not payload.phone_number:
-        raise HTTPException(status_code=400, detail="phone_number is required")
     if not WEBHOOK_ENDPOINT:
         raise HTTPException(
             status_code=500, detail="WEBHOOK_ENDPOINT is not configured on this server"
@@ -106,10 +104,16 @@ async def create_ozonetel_call(payload: PreCallContextRequest):
 
     call_id = str(uuid.uuid4())
     lead_context = condition_lead_context(payload.model_dump(exclude_none=True))
+    # phone_number covers our own brief shape; LeadForge's response payload
+    # carries it as `phone` instead — condition_lead_context already folds
+    # whichever one was sent into lead_context["phone_number"].
+    phone_number = lead_context.get("phone_number")
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="phone_number (or phone) is required")
     _pending_call_context[call_id] = lead_context
 
     response = await asyncio.to_thread(
-        ozonetel_client.trigger_outbound_call, payload.phone_number, call_id, WEBHOOK_ENDPOINT
+        ozonetel_client.trigger_outbound_call, phone_number, call_id, WEBHOOK_ENDPOINT
     )
     if response.status_code != 200:
         _pending_call_context.pop(call_id, None)
